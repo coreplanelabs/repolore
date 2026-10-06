@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Deal a public GitHub repo its awards. Find the merge machines, delete legends, and comment magnets—with receipts.">
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+  <meta property="og:title" content="Repo Lore — your repo has lore">
+  <meta property="og:description" content="Find the merge machines, delete legends, and comment magnets behind your favorite GitHub repo.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
+  <title>Repo Lore — your repo has lore</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <header class="masthead"><a class="brand" href="./" aria-label="Repo Lore home"><span class="brand-icon" aria-hidden="true">R</span> REPO LORE<span class="beta">BETA</span></a><div class="header-actions"><div class="theme-picker" role="group" aria-label="Color theme"><button type="button" data-theme-choice="light" aria-pressed="false">Light</button><button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button><button type="button" data-theme-choice="system" aria-pressed="true">System</button></div><a class="polylane-outlink" aria-label="Polylane website" href="https://polylane.com/?utm_source=repo-lore&amp;utm_medium=header" target="_blank" rel="noopener noreferrer"><span class="polylane-wordmark"><img class="logo-light" src="./assets/polylane.svg" alt="Polylane"><img class="logo-dark" src="./assets/polylane-white.svg" alt="" aria-hidden="true"></span><span data-icon="arrow"></span></a></div></header>
+  <main>
+    <section class="hero" aria-labelledby="hero-title">
+
+      <h1 id="hero-title">Your repo<br>has <span class="lore">lore</span>.</h1>
+      <p class="intro">A few stats about the people behind your favorite GitHub repo.</p>
+      <form id="repo-form" class="repo-form">
+        <label for="repo-input" class="sr-only">Public GitHub repository URL or owner/repo</label>
+        <span class="input-symbol" data-icon="github"></span>
+        <input id="repo-input" name="repo" placeholder="owner/repo or https://github.com/owner/repo" autocomplete="off" autocapitalize="none" spellcheck="false" required maxlength="200">
+        <button id="submit-button" type="submit">Deal the cards <span data-icon="arrow"></span></button>
+      </form>
+      <div class="try-row"><span>TRY A REAL EXAMPLE</span><button class="repo-chip" data-repo="pytest-dev/pytest" data-example="true">pytest</button><button class="repo-chip" data-repo="vitejs/vite" data-example="true">vite</button><button class="repo-chip" data-repo="pallets/itsdangerous">itsdangerous</button></div>
+      <p class="fine-print">No sign-up. No private data. Reads a recent snapshot from GitHub.</p>
+      <div id="loading" class="loading" role="status" aria-live="polite" hidden><div class="shuffle-deck" aria-hidden="true"><span data-icon="merge"></span><span data-icon="delete"></span><span data-icon="fast"></span></div><div class="loading-copy"><strong id="loading-whimsy">Shuffling the repo lore…</strong><span id="progress-text">Finding your repo…</span></div></div>
+      <div id="error" class="error" role="alert" hidden><strong>This round did not load.</strong><p id="error-text"></p></div>
+    </section>
+    <section id="result" class="result" aria-labelledby="result-title" hidden>
+      <div class="result-top"><div><p class="eyebrow">THE CARDS ARE IN <span class="deck-mark" data-deck aria-hidden="true"></span></p><h2 id="result-title"></h2><p id="repo-description" class="repo-description"></p></div><div class="share-actions"><button id="copy-button" class="secondary">Copy as text <span data-icon="copy"></span></button><button id="card-button" class="secondary dark">Share results <span data-icon="share"></span></button></div></div>
+      <div class="scope-bar"><span id="scope-text"></span><span id="read-time"></span></div>
+      <p id="summary" class="summary"></p>
+      <div id="awards" class="awards"></div>
+      <div class="contribute"><div class="door-icon" data-icon="book"></div><div><h3>Thinking of sending a PR?</h3><p id="contribute-text"></p></div><a id="contribute-link" class="contribute-link" target="_blank" rel="noopener noreferrer">Read the house rules</a></div>
+      <details class="coverage"><summary>Behind the awards <span data-icon="chevron"></span></summary><div class="coverage-body"><p id="coverage-text"></p><ul id="notes"></ul><p>Bot accounts count as accounts. PR authors get merge credit; clicking the merge button is a different action. Diff counts include documentation, generated files, and other text. Comments do not establish defects. None of these awards measure developer skill, AI authorship, deployment, or uptime.</p><button id="json-button" class="text-button">Save the source data <span data-icon="download"></span></button></div></details>
+      <p id="action-message" class="action-message" role="status" aria-live="polite"></p>
+    </section>
+  </main>
+    <footer class="site-footer"><div class="made-by"><span>Made by</span><a class="polylane-outlink" href="https://polylane.com/?utm_source=repo-lore" aria-label="Polylane website" target="_blank" rel="noopener noreferrer"><span class="polylane-wordmark"><img class="logo-light" src="./assets/polylane.svg" alt="Polylane"><img class="logo-dark" src="./assets/polylane-white.svg" alt="" aria-hidden="true"></span></a></div><nav aria-label="Polylane socials"><a class="social-button" href="https://x.com/polylane" aria-label="Polylane on X" title="X" target="_blank" rel="noopener noreferrer"><svg class="social-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M14.234 10.162L22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299l-.929-1.329L3.076 1.56h3.182l5.965 8.532l.929 1.329l7.754 11.09h-3.182z"/></svg></a><a class="social-button" href="https://www.linkedin.com/company/polylane" aria-label="Polylane on LinkedIn" title="LinkedIn" target="_blank" rel="noopener noreferrer"><svg class="social-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037c-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85c3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.06 2.06 0 0 1-2.063-2.065a2.064 2.064 0 1 1 2.063 2.065m1.782 13.019H3.555V9h3.564zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0z"/></svg></a></nav></footer>
+  <dialog id="export-dialog" aria-labelledby="export-title"><div class="export-heading"><h2 id="export-title">Share results</h2><button id="export-close" class="secondary">Close <span data-icon="close"></span></button></div><p id="export-description"></p><fieldset id="share-selection" hidden><legend>Pick your awards</legend><p>Start with three. Add your favorites or share just one.</p><div id="share-options" class="share-options"></div><span id="selection-message" role="status" aria-live="polite"></span></fieldset><img id="export-image" alt="Repo Lore results with selected awards, summary, and snapshot scope" hidden><label id="export-label" for="export-data" hidden>Report evidence JSON</label><textarea id="export-data" readonly hidden spellcheck="false"></textarea><div class="export-actions"><a id="export-download" class="download-link">Download image <span data-icon="download"></span></a><button id="export-copy" class="secondary" hidden>Copy JSON</button><button id="export-link" class="secondary">Copy link <span data-icon="share"></span></button><button id="export-caption" class="secondary">Copy as text <span data-icon="copy"></span></button></div><label id="export-url-label" class="export-url-label" for="export-url">Results link</label><input id="export-url" readonly aria-label="Results link"></dialog>
+</body>
+</html>
