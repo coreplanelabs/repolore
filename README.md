@@ -7,6 +7,8 @@ pick your favorites to share as an image or text.
 [repolore.fun](https://repolore.fun) is temporarily limited to Coreplane accounts
 through Cloudflare SSO. You can run the app locally without an account.
 
+![Example Repo Lore results from the dated Vite snapshot](docs/example.png)
+
 ## Run locally
 
 Use Node 22 or later. Development dependencies use Bun.
