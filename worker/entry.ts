@@ -5,7 +5,7 @@ interface Env { ASSETS: { fetch(request: Request): Promise<Response> }; REPORTS:
 let handler: ReturnType<typeof createHandler> | undefined;
 export default {
   fetch(request: Request, env: Env): Promise<Response> {
-    handler ??= createHandler({ assets: env.ASSETS, store: env.REPORTS, fetch, now: Date.now, githubToken: env.GITHUB_TOKEN,
+    handler ??= createHandler({ assets: env.ASSETS, store: env.REPORTS, fetch: (input, init) => fetch(input, init), now: Date.now, githubToken: env.GITHUB_TOKEN,
       png: pngRenderer(wasm, async () => Promise.all([400, 500].map(async weight => {
         const response = await env.ASSETS.fetch(new Request(`https://assets.internal/assets/dm-sans-${weight}-ascii.ttf`));
         if (!response.ok) throw new Error("The local preview font is unavailable.");
