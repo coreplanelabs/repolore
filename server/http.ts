@@ -143,6 +143,10 @@ export function createHandler(options: ServerOptions): (request: Request) => Pro
         const target = repositoryPath(cause.repository);
         return response(null, 301, "text/plain", { Location: path.startsWith("/api/repos/") ? `/api/repos${target}` : target });
       }
+      if (!(cause instanceof ArcadeError) && cause instanceof Error) {
+        const detail = options.githubToken ? cause.message.replaceAll(options.githubToken, "[redacted]") : cause.message;
+        console.warn("RepoLore request failed", { path, name: cause.name, detail });
+      }
       const known = cause instanceof ArcadeError;
       const message = known ? cause.message : "This round could not be loaded. Try again later.";
       const status = known && ["NOT_FOUND", "PRIVATE"].includes(cause.code) ? 404 : known && cause.code === "INPUT" ? 400 : known && cause.code === "RATE_LIMIT" ? 429 : 503;
