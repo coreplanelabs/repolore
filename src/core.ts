@@ -1,5 +1,5 @@
 export type Evidence = { number: number; title: string; url: string };
-export type Author = { id: number; login: string; bot: boolean };
+export type Author = { id: number; login: string; bot: boolean; avatarUrl?: string };
 export type Pull = Evidence & {
   author: Author | null; createdAt: number; updatedAt: number;
   mergedAt: number | null; draft: boolean; association: string; headSha: string;
@@ -9,15 +9,16 @@ export type Award = {
   id: string; name: string; icon: string; status: "observed" | "empty" | "unknown";
   headline: string; value: string; description: string; scope: string; evidence: Evidence[];
 };
+export type RepositoryProfile = { owner: Author | null; stars: number | null; forks: number | null; language: string | null };
 export type Report = {
-  version: 1; repository: string; url: string; description: string; capturedAt: string;
+  version: 1; profile?: RepositoryProfile; repository: string; url: string; description: string; capturedAt: string;
   summary: string; awards: Award[]; notes: string[]; contributingUrl: string | null;
   coverage: { days: number; closedRead: number; mergedObserved: number; periodComplete: boolean;
     detailsRequested: number; detailsRead: number; openRead: number; requests: number };
   facts: { closed: Pull[]; open: Pull[]; details: Detail[]; openKnown: boolean };
 };
 export class ArcadeError extends Error {
-  constructor(public code: string, message: string) { super(message); this.name = "ArcadeError"; }
+  constructor(public code: string, message: string, public repository?: string) { super(message); this.name = "ArcadeError"; }
 }
 const DAY = 86_400_000;
 const API = "https://api.github.com";
@@ -60,7 +61,15 @@ function author(value: unknown): Author | null {
   const row = object(value);
   const id = count(row.id);
   if (!id) throw new ArcadeError("DATA", "A contributor record is missing its identity.");
-  return { id, login: text(row.login, 100), bot: row.type === "Bot" };
+  let avatarUrl = `https://avatars.githubusercontent.com/u/${id}?s=160&v=4`;
+  if (typeof row.avatar_url === "string") {
+    try {
+      const url = new URL(row.avatar_url);
+      if (url.origin === "https://avatars.githubusercontent.com" && !url.username && !url.password &&
+        (url.pathname === `/u/${id}` || (row.type === "Bot" && /^\/in\/[1-9]\d{0,14}$/.test(url.pathname)))) avatarUrl = `${url.origin}${url.pathname}?s=160&v=4`;
+    } catch { /* An invalid photo cannot change the author identity or counts. */ }
+  }
+  return { id, login: text(row.login, 100), bot: row.type === "Bot", avatarUrl };
 }
 export function parsePull(value: unknown, repository: string): Pull {
   const row = object(value); const number = count(row.number);
@@ -87,7 +96,7 @@ function empty(id: string, name: string, icon: string, description: string, scop
 export function buildReport(input: {
   repository: string; description: string; now: number; closed: Pull[]; open: Pull[];
   details: Detail[]; periodComplete: boolean; notes: string[]; contributingUrl: string | null;
-  requests: number; openKnown: boolean; detailRequested: number;
+  requests: number; openKnown: boolean; detailRequested: number; profile?: RepositoryProfile;
 }): Report {
   const { repository, now, closed, open, details } = input;
   const since = now - 90 * DAY;
@@ -138,7 +147,7 @@ export function buildReport(input: {
       description: "Blink and it merged. Shortest PR opening-to-merge time observed. Includes draft time, waiting and automation. This is not time spent coding.", scope: mergeScope, evidence: [fastest] });
   } else awards.push(empty("fast", "Fastest Lap", "fast", "No recent merge with a valid opening-to-merge interval was found.", mergeScope));
   const summary = `I found ${merged.length} PR${merged.length === 1 ? "" : "s"} merged in the past 90 days within ${closed.length} recently updated closed PRs. ${top ? `@${top.author.login} authored ${top.pulls.length} of those merges. ` : ""}I inspected ${inspected.length} selected PRs for diff and inline-review counts. These awards describe the observed snapshot, not developer skill or the project's contribution policy.`;
-  return { version: 1, repository, url: `https://github.com/${repository}`, description: input.description,
+  return { version: 1, ...(input.profile ? { profile: input.profile } : {}), repository, url: `https://github.com/${repository}`, description: input.description,
     capturedAt: new Date(now).toISOString(), summary, awards, notes: input.notes,
     contributingUrl: input.contributingUrl, coverage: { days: 90, closedRead: closed.length, mergedObserved: merged.length,
       periodComplete: input.periodComplete, detailsRequested: input.detailRequested, detailsRead: inspected.length,
@@ -175,8 +184,12 @@ export async function collectReport(raw: string, options: {
   const metadata = object(await read(""));
   if (metadata.private !== false) throw new ArcadeError("PRIVATE", "Repo Lore reads public repositories only.");
   const canonical = parseRepository(text(metadata.full_name, 150));
-  if (canonical.toLowerCase() !== repository.toLowerCase()) throw new ArcadeError("MOVED", `This repository moved. Try ${canonical} instead.`);
+  if (canonical.toLowerCase() !== repository.toLowerCase()) throw new ArcadeError("MOVED", `This repository moved. Try ${canonical} instead.`, canonical);
   repository = canonical;
+  const optionalCount = (value: unknown): number | null => Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : null;
+  const profile: RepositoryProfile = { owner: metadata.owner ? author(metadata.owner) : null,
+    stars: optionalCount(metadata.stargazers_count), forks: optionalCount(metadata.forks_count),
+    language: typeof metadata.language === "string" ? metadata.language.slice(0, 80) : null };
   const description = metadata.description === null ? "" : text(metadata.description, 300);
   progress("Reading the recent merges and the oldest open PRs…");
   const results = await Promise.allSettled([
@@ -238,7 +251,7 @@ export async function collectReport(raw: string, options: {
       }
     } catch { notes.push("GitHub did not return a readable contribution guide. Check the repository's own documentation."); }
   } else notes.push("The contribution guide was not checked because the read stopped early.");
-  return buildReport({ repository, description, now: options.now, closed, open, details, periodComplete,
+  return buildReport({ repository, description, profile, now: options.now, closed, open, details, periodComplete,
     notes: [...new Set(notes)], contributingUrl, requests, openKnown, detailRequested: selected.length });
 }
 export function plainReport(report: Report): string {
@@ -258,7 +271,7 @@ export function replayReport(value: unknown): Report {
       if (typeof value !== "number" || !Number.isFinite(value) || Math.abs(value) > 8.64e15) throw new ArcadeError("DATA", "The saved evidence has an unreadable timestamp.");
       return new Date(value).toISOString();
     }
-    return parsePull({ number: row.number, title: row.title, user: user ? { id: user.id, login: user.login, type: user.bot === true ? "Bot" : "User" } : null,
+    return parsePull({ number: row.number, title: row.title, user: user ? { id: user.id, login: user.login, type: user.bot === true ? "Bot" : "User", avatar_url: user.avatarUrl } : null,
       created_at: date(row.createdAt), updated_at: date(row.updatedAt), merged_at: row.mergedAt === null ? null : date(row.mergedAt), draft: row.draft,
       author_association: row.association, head: { sha: row.headSha } }, repository);
   }
@@ -278,7 +291,14 @@ export function replayReport(value: unknown): Report {
     const url = new URL(saved.contributingUrl);
     if (url.protocol === "https:" && url.hostname === "github.com" && !url.username && !url.password && url.pathname.toLowerCase().startsWith(`/${repository.toLowerCase()}/`)) contributingUrl = url.href;
   }
-  return buildReport({ repository, description: text(saved.description, 300), now,
+  let profile: RepositoryProfile | undefined;
+  if (saved.profile) {
+    const row = object(saved.profile); const owner = row.owner === null ? null : object(row.owner);
+    const optionalCount = (value: unknown): number | null => value === null ? null : count(value);
+    profile = { owner: owner ? author({ id: owner.id, login: owner.login, type: owner.bot === true ? "Bot" : "User", avatar_url: owner.avatarUrl }) : null,
+      stars: optionalCount(row.stars), forks: optionalCount(row.forks), language: row.language === null ? null : text(row.language, 80) };
+  }
+  return buildReport({ repository, profile, description: text(saved.description, 300), now,
     closed: facts.closed.map(pull), open: facts.open.map(pull), details, openKnown: facts.openKnown,
     detailRequested: requested, periodComplete: coverage.periodComplete, notes, contributingUrl, requests: count(coverage.requests) });
 }

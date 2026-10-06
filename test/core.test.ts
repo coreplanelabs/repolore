@@ -178,3 +178,9 @@ test("Fastest Lap uses the valid minimum and readable singular units", () => {
   const closed = [parsePull(row(1, { created_at: "2026-10-05T11:00:00Z" }), repository), parsePull(row(2), repository)];
   assert.equal(report(closed).awards.find(a => a.id === "fast")?.value, "1 hour");
 });
+test("bot app portraits preserve GitHub's in/ avatar source without accepting other hosts", () => {
+  const pr = parsePull(row(1, { user: { id: 42, login: "helper[bot]", type: "Bot", avatar_url: "https://avatars.githubusercontent.com/in/1234?v=4" } }), repository);
+  assert.equal(pr.author?.avatarUrl, "https://avatars.githubusercontent.com/in/1234?s=160&v=4");
+  const malicious = parsePull(row(2, { user: { id: 42, login: "person", type: "User", avatar_url: "https://evil.test/u/42" } }), repository);
+  assert.equal(malicious.author?.avatarUrl, "https://avatars.githubusercontent.com/u/42?s=160&v=4");
+});

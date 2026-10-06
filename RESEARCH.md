@@ -48,3 +48,24 @@ benchmarks. Large-repo and quiet-repo behavior matter as much as a happy path.
 
 Readiness, public release and product resonance are separate. Keep the package
 private on npm with its publication refusal. Source is published on GitHub with the user's approval.
+
+## URL-first repo identity and comparisons
+
+- Shiptalkers (https://shiptalkers.dev/) makes the hook personal through named
+  identities and public comparisons. Repo Lore uses identities and comparisons
+  of literal PR records, without importing a quality judgment or Twitter data.
+- Yappers (https://yappers.context.dev/@t3dotchat) leads with a group's identity,
+  people, and standings. Repo Lore adds GitHub portraits, contributor standings,
+  overlapping top-three photos, and a rest count.
+- Nominal's OG guidance uses local fonts, a shared card design, PNG output,
+  and prerasterized image assets to avoid expensive blur/turbulence. This app
+  uses local licensed font subsets, PNG/JPEG portraits, a common 1200x630 layout,
+  and cached resvg WASM renders.
+- GitHub API quota guidance: https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
+- PNG renderer source: https://github.com/yisibl/resvg-js
+
+Acceptance: clean owner/repo paths; server-rendered canonical and OG metadata;
+versioned PNGs tied to the same snapshot; no sharing UI; three contributor
+portraits plus correct rest count; sourced cross-repo rows; no token in browser
+or stored facts; SSO remains intact. Tests inject fetch, storage, clock, and PNG
+rendering. Real HTTP, image, and mobile checks supplement the offline suite.

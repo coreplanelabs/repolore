@@ -6,5 +6,6 @@ Use Node 22+ for runtime, Bun for pinned development dependencies, and keep the
 npm package private with its publication refusal. Tests must stay offline.
 Before deployment, verify the Cloudflare account, exact domain, and Access
 policy. workers.dev and preview URLs stay disabled while SSO is required.
-Never read or ship credentials. Do not post to repositories or social accounts.
+Keep configured GitHub tokens server-only. Never discover local CLI credentials
+at runtime or put credential values in source, browser responses, or logs. Do not post to repositories or social accounts.
 Run build, typecheck, and tests for logic changes; check affected browser layouts.

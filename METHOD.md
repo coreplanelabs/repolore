@@ -50,3 +50,22 @@ count. A page URL reruns a repository and can produce a different later snapshot
 
 The application performs public reads only. It has no email collection, global
 rankings, fake events, sentiment classifier, telemetry, or repository mutations.
+
+## Cross-repo comparisons
+
+Each category compares the winning **observed** value from the saved snapshot
+of each indexed popular repository. These are not lifetime or comprehensive
+90-day leaderboards. Closed listings cap at 100 recently updated PRs, and diff
+categories inspect at most ten eligible selected merges. Inspected counts and
+capture dates remain visible. A partial read can miss a larger event.
+
+Delete Club compares gross deletions on one inspected PR. Comment Magnet compares
+one PR's inline comment count. Merge Machine compares observed authored merge
+counts. The Cast compares distinct observed authors. The Long Goodbye compares
+calendar age of an open PR; Fastest Lap compares opening-to-merge duration.
+Scores use normalized facts, not numbers parsed from display prose.
+
+GitHub API author IDs identify people and bots. Contributor photos use the API's
+validated `avatars.githubusercontent.com/u/` or bot-app `/in/` source. Repo-owner
+photos, stars, forks, and language come from the public metadata record. A photo
+failure does not change an award. GitHub's `Bot` type is not an AI-authorship claim.

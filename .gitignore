@@ -9,3 +9,6 @@ receipts/
 .dev.vars.*
 *.tgz
 .DS_Store
+
+.server-dist/
+.data/

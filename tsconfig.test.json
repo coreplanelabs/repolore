@@ -1,5 +1,14 @@
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": { "rootDir": ".", "outDir": ".test-dist", "allowJs": false, "checkJs": false },
-  "include": ["src/core.ts", "test/**/*.ts"]
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": ".test-dist",
+    "allowJs": false,
+    "checkJs": false
+  },
+  "include": [
+    "src/**/*.ts",
+    "server/**/*.ts",
+    "test/**/*.ts"
+  ]
 }
