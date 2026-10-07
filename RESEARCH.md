@@ -69,3 +69,18 @@ versioned PNGs tied to the same snapshot; no sharing UI; three contributor
 portraits plus correct rest count; sourced cross-repo rows; no token in browser
 or stored facts; SSO remains intact. Tests inject fetch, storage, clock, and PNG
 rendering. Real HTTP, image, and mobile checks supplement the offline suite.
+
+## Compact award hierarchy
+
+The card groups its content into result, comparison, and evidence/actions.
+A high-contrast rank is the central item in a three-position comparison strip;
+neighboring repos use smaller text, arrows, and quieter portraits. It borrows
+picker hierarchy without pretending that rank is an editable selection.
+Related footer actions share a baseline and 44px touch targets. Natural card
+height replaces minimum heights and auto margins that separated related content.
+
+Design basis: [NN/g proximity](https://www.nngroup.com/articles/gestalt-proximity/),
+[NN/g visual hierarchy](https://www.nngroup.com/articles/principles-visual-design/),
+and [Apple pickers](https://developer.apple.com/design/human-interface-guidelines/pickers).
+These guide the layout; browser review verifies the implementation, not a claim
+that this exact design has been experimentally validated.
