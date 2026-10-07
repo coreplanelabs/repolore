@@ -5,6 +5,8 @@ import { icon, deckArtwork } from "./icons.js";
 import { chartsMarkup } from "./charts.js";
 import type { DailyPoint } from "./analytics.js";
 import type { LeaderboardRow } from "./catalog.js";
+import { setupHelp } from "./help.js";
+import type { StarHistory } from "./star-history.js";
 import { resolveTheme, themePreference, type ThemePreference } from "./theme.js";
 
 function element<T extends HTMLElement>(id: string): T {
@@ -13,10 +15,11 @@ function element<T extends HTMLElement>(id: string): T {
   return found as T;
 }
 document.querySelectorAll<HTMLElement>("[data-icon]").forEach(node => node.replaceChildren(icon(node.dataset.icon ?? "arrow")));
+setupHelp();
 const form = element<HTMLFormElement>("repo-form"), input = element<HTMLInputElement>("repo-input"), submit = element<HTMLButtonElement>("submit-button");
 const result = element("result"), loading = element("loading"), error = element("error");
 const cache = new Map<string, Report>();
-const presentationCache = new Map<string, { history: DailyPoint[]; comparison: LeaderboardRow[] }>();
+const presentationCache = new Map<string, { history: DailyPoint[]; comparison: LeaderboardRow[]; stars?: StarHistory | null }>();
 let generation = 0;
 const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
 let preference: ThemePreference = "system";
@@ -52,14 +55,14 @@ function celebrate(): void {
 function imageFallbacks(): void {
   document.querySelectorAll<HTMLImageElement>(".portrait img, #repo-avatar").forEach(image => image.addEventListener("error", () => { image.hidden = true; }));
 }
-function render(report: Report, presentation?: { history: DailyPoint[]; comparison: LeaderboardRow[] }): void {
+function render(report: Report, presentation?: { history: DailyPoint[]; comparison: LeaderboardRow[]; stars?: StarHistory | null }): void {
   document.documentElement.classList.add("has-report");
   input.value = report.repository;
   element("result-title").textContent = report.repository;
   element("repo-description").textContent = report.description;
   element("repo-hook").textContent = hook(report);
   element("header-cast").innerHTML = castFaces(report);
-  element("insights").innerHTML = chartsMarkup(report, presentation?.history, presentation?.comparison);
+  element("insights").innerHTML = chartsMarkup(report, presentation?.history, presentation?.comparison, presentation?.stars);
   submit.textContent = "Show repo";
   element<HTMLDetailsElement>("repo-lookup").open = false;
   const owner = report.profile?.owner, avatar = element<HTMLImageElement>("repo-avatar");
@@ -98,13 +101,13 @@ async function load(raw: string, navigate = true): Promise<void> {
   let line = 0; element("loading-whimsy").textContent = loadingLines[0]; element("progress-text").textContent = "Meeting the cast and reading the plot…";
   const timer = window.setInterval(() => { if (run === generation) element("loading-whimsy").textContent = loadingLines[++line % loadingLines.length]; }, 2200);
   try {
-    let details: { history: DailyPoint[]; comparison: LeaderboardRow[] } | undefined;
+    let details: { history: DailyPoint[]; comparison: LeaderboardRow[]; stars?: StarHistory | null } | undefined;
     let expected = repository;
     let report = cache.get(repository.toLowerCase()); details = presentationCache.get(repository.toLowerCase());
     if (!report) {
       const response = await fetch(`/api/repos${repositoryPath(repository)}`, { signal: AbortSignal.timeout(30_000) });
       if (response.redirected) { expected = repositoryFromPath(new URL(response.url).pathname.slice(10)) ?? repository; }
-      const body = await response.json() as { error?: string; presentation?: { history: DailyPoint[]; comparison: LeaderboardRow[] } };
+      const body = await response.json() as { error?: string; presentation?: { history: DailyPoint[]; comparison: LeaderboardRow[]; stars?: StarHistory | null } };
       if (!response.ok) throw new Error(body.error ?? "This round could not be loaded. Try again later.");
       report = replayReport(body); details = body.presentation; if (details) presentationCache.set(report.repository.toLowerCase(), details);
     }
@@ -139,7 +142,7 @@ window.addEventListener("popstate", () => {
 });
 const bootstrap = document.getElementById("repo-data")?.textContent;
 if (bootstrap && bootstrap !== "null") {
-  try { const data = JSON.parse(bootstrap) as { error?: string; presentation?: { history: DailyPoint[]; comparison: LeaderboardRow[] } }; if (typeof data.error === "string") { element("error-text").textContent = data.error; error.hidden = false; } else { const report = replayReport(data); if (data.presentation) presentationCache.set(report.repository.toLowerCase(), data.presentation); cache.set(report.repository.toLowerCase(), report); render(report, data.presentation); } }
+  try { const data = JSON.parse(bootstrap) as { error?: string; presentation?: { history: DailyPoint[]; comparison: LeaderboardRow[]; stars?: StarHistory | null } }; if (typeof data.error === "string") { element("error-text").textContent = data.error; error.hidden = false; } else { const report = replayReport(data); if (data.presentation) presentationCache.set(report.repository.toLowerCase(), data.presentation); cache.set(report.repository.toLowerCase(), report); render(report, data.presentation); } }
   catch { element("error-text").textContent = "This snapshot could not be read. Enter the repo to try again."; error.hidden = false; }
 } else {
   const initial = repositoryFromPath(location.pathname) ?? new URL(location.href).searchParams.get("repo");

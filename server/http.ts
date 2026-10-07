@@ -1,6 +1,8 @@
 import { ArcadeError, collectReport, parseRepository, replayReport, type Report } from "../src/core.js";
 import { CATEGORIES, leaderboard, repositoryFromPath, repositoryPath } from "../src/catalog.js";
 import { cohortReports, readCatalog, readHistory, recordIndexed } from "./indexing.js";
+import { captureStars, readStars } from "./stars.js";
+import { starMetric } from "../src/star-history.js";
 import { relativeRows } from "../src/analytics.js";
 import { pageHtml, safeJson } from "./html.js";
 import { boardCard, ogSvg, reportCard, siteCard, type OgCard } from "./og.js";
@@ -50,6 +52,10 @@ export function createHandler(options: ServerOptions): (request: Request) => Pro
           await options.store.put(`repo:${key}`, body, { expirationTtl: 900 });
           await options.store.put(`snapshot:${key}:${Date.parse(report.capturedAt)}`, body, { expirationTtl: 900 });
         }
+        try {
+          const stars = await captureStars(report.repository, { fetch: options.fetch, now: options.now(), signal: deadline(2000), token: options.githubToken });
+          await options.store.put(`stars:${key}`, JSON.stringify(stars), indexed ? undefined : { expirationTtl: 900 });
+        } catch { /* Star history cannot block a valid PR report. */ }
         return report;
       } catch (cause) {
         if (saved && cause instanceof ArcadeError && ["RATE_LIMIT", "NETWORK", "TIMEOUT", "GITHUB"].includes(cause.code)) return { ...saved, notes: [...saved.notes, "A fresh read was unavailable. This is the last saved public snapshot; its original read date is shown."] };
@@ -59,9 +65,14 @@ export function createHandler(options: ServerOptions): (request: Request) => Pro
     inFlight.set(key, pending); return pending;
   }
   async function reports(cohort = "top"): Promise<Report[]> { return (await cohortReports(options.store, cohort)).reports; }
+  async function boardRows(reports: Report[], category: string) {
+    return Promise.all(leaderboard(reports, category).map(async row => {
+      const metric = starMetric(await readStars(options.store, row.repository)); return { ...row, starAdded: metric?.added, starDays: metric?.days };
+    }));
+  }
   async function presentation(report: Report) {
     const history = await readHistory(options.store, report.repository), comparison = relativeRows(report, await reports(), "comments");
-    return { history, comparison };
+    return { history, comparison, stars: await readStars(options.store, report.repository) };
   }
   async function avatar(id: string, size: number): Promise<{ bytes: Uint8Array; type: string } | null> {
     const result = await options.fetch(`https://avatars.githubusercontent.com${id}?s=${size}&v=4`, { redirect: "error", signal: deadline(5000), headers: { Accept: "image/png,image/jpeg" } });
@@ -73,7 +84,7 @@ export function createHandler(options: ServerOptions): (request: Request) => Pro
   async function renderCardImage(card: OgCard): Promise<Uint8Array> {
     const ids = [...new Set([card.ownerId, ...card.columns.flatMap(column => [column.photoId, ...(column.photoIds ?? [])])].filter((id): id is string => Boolean(id)))];
     const images = new Map<string, string>();
-    await Promise.all(ids.slice(0, 6).map(async id => {
+    await Promise.all(ids.slice(0, 10).map(async id => {
       const key = String(id), saved = imageCache.get(key);
       if (saved && saved.until > options.now()) { if (saved.data) images.set(id, saved.data); return; }
       let data: string | null = null;
@@ -123,13 +134,13 @@ export function createHandler(options: ServerOptions): (request: Request) => Pro
       } else if (path === "/leaderboards") return response(null, 301, "text/plain", { Location: "/leaderboards/comments" });
       else if (path.startsWith("/leaderboards/") && CATEGORIES[path.slice(14)]) {
         const category = path.slice(14), cohort = url.searchParams.get("cohort") === "top" ? "top" : "trending";
-        const data = await cohortReports(options.store, cohort), rows = leaderboard(data.reports, category);
+        const data = await cohortReports(options.store, cohort), rows = await boardRows(data.reports, category);
         result = response(pageHtml(await shell(), url.origin, undefined, { category, rows, cohort, warming: data.warming, selected: data.selected, provisional: data.provisional }));
       } else if (path.startsWith("/_og/") && path.endsWith(".png")) {
         let card: OgCard;
         if (path === "/_og/site.png") card = siteCard();
         else if (path.startsWith("/_og/leaderboards/") && CATEGORIES[path.slice("/_og/leaderboards/".length, -4)]) {
-          const category = path.slice("/_og/leaderboards/".length, -4); card = boardCard(CATEGORIES[category].name, leaderboard(await reports(url.searchParams.get("cohort") === "top" ? "top" : "trending"), category));
+          const category = path.slice("/_og/leaderboards/".length, -4); card = boardCard(CATEGORIES[category].name, leaderboard(await reports(url.searchParams.get("cohort") === "top" ? "top" : "trending"), category), category);
         } else {
           const repository = repositoryFromPath(path.slice(4, -4));
           if (!repository) return response("Not found", 404, "text/plain");

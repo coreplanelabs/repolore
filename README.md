@@ -70,7 +70,8 @@ CDN, browser screenshot service, or inference provider is required.
 
 A read checks public metadata first, then reads up to 100 recently updated
 closed PRs, the 30 oldest open PRs, and details for up to ten selected recent
-merges. At most 14 GitHub requests run with two diff reads at a time. A 24-second
+merges. The PR scan uses at most 14 GitHub requests, with two diff reads at a time.
+One optional request reads aggregate star history after public validation. A 24-second
 deadline and eight-million-character response cap bound the scan. Private repos
 are rejected even when a server credential is configured.
 
@@ -107,15 +108,13 @@ With a dedicated `GITHUB_TOKEN`, a fifteen-minute Worker cron refreshes up to
 four repos per run. Each day it discovers up to 100 public, non-fork, non-archived
 repos with the most stars. A full 100-repo pass takes about 6.25 hours. It retains
 up to 90 daily readings; same-day captures replace that day rather than creating
-fake history. Trending selects up to 20 indexed repos by positive net star growth
-over up to seven days. Top stars uses the discovered shortlist. Both groups rank
-the selected award, not stars. Until discovery and a second daily reading exist,
-the UI names the curated baseline and warming state. Without a token the cron
+fake history. Trending selects up to 20 indexed repos by stars added over the last 30 days
+from GitHub's aggregate daily history. Top stars uses the discovered shortlist. Both groups rank
+the selected award, not stars. Selection and missing-history explanations remain in the help control. Without a token the cron
 does no GitHub reads. An arbitrary queried repo is compared against the index,
 but is not permanently added to it.
 
-Repo graphs show human/bot merge shares, sampled daily merge activity, actual
-star readings, and the repo's Comment Magnet comparison. Unknown accounts stay
+Repo graphs show human/bot merge shares, sampled daily merge activity, daily star additions and actual total-star readings, and the repo's Comment Magnet comparison. Unknown accounts stay
 separate. Missing days and history are not fabricated.
 
 ## For terminal users and agents
@@ -153,3 +152,23 @@ The footer credits Polylane: built for fun.
 Code is MIT-licensed. Fonts, icons, and the PNG renderer retain their licenses;
 GitHub photos retain their owners' rights. See [THIRD_PARTY.md](THIRD_PARTY.md).
 The package remains private on npm with a publication refusal.
+
+## Star history backfill
+
+GitHub's public aggregate `/repos/owner/repo/stargazers/history` endpoint
+returns weekly groups with seven daily addition counts. Repo Lore reads six
+weeks, keeps the last 30 dates before the current UTC date, and preserves missing
+dates as missing. GitHub calendar boundaries may differ from UTC. These are
+**stars added**, not net growth after unstars or historical total-star balances.
+
+For the saved public comparison set, an explicit maintainer backfill uses `gh`
+without saving its credential:
+
+```sh
+bun run build
+node scripts/backfill-stars.mjs --popular
+wrangler kv bulk put .data/star-seed.json --binding REPORTS --remote
+```
+
+Hover or keyboard focus opens positioned explanations on desktop. Phones and
+touch devices use a tap-open modal with a close button and Escape support.

@@ -1,6 +1,8 @@
 import { collectReport, parseRepository, replayReport, type Report } from "../src/core.js";
 import { POPULAR_REPOS } from "../src/catalog.js";
-import { appendPoint, dailyPoint, starGrowth, type DailyPoint } from "../src/analytics.js";
+import { appendPoint, dailyPoint, type DailyPoint } from "../src/analytics.js";
+import { captureStars, readStars } from "./stars.js";
+import { starMetric } from "../src/star-history.js";
 import type { Store } from "./http.js";
 export type Catalog = { selected: string[]; discoveredAt: string | null; cursor: number; lastRefresh?: string; status?: string };
 export async function readCatalog(store: Store): Promise<Catalog> {
@@ -35,7 +37,7 @@ export async function cohortReports(store: Store, cohort = "trending"): Promise<
     })); found.push(...batch.filter((row): row is Report => row !== null));
   }
   if (cohort === "top") return { reports: found, warming: false, selected: catalog.selected.length, provisional: !catalog.discoveredAt };
-  const growth = await Promise.all(found.map(async report => ({ report, growth: starGrowth(await readHistory(store, report.repository)) })));
+  const growth = await Promise.all(found.map(async report => ({ report, growth: starMetric(await readStars(store, report.repository))?.added ?? null })));
   const trending = growth.filter((row): row is { report: Report; growth: number } => row.growth !== null && row.growth > 0).sort((a, b) => b.growth - a.growth || a.report.repository.localeCompare(b.report.repository)).slice(0, 20);
   return { reports: trending.length ? trending.map(row => row.report) : found, warming: trending.length === 0, selected: catalog.selected.length, provisional: !catalog.discoveredAt };
 }
@@ -63,7 +65,8 @@ export async function refreshIndex(options: { store: Store; fetch: typeof fetch;
       const headers = new Headers(init?.headers); headers.set("Authorization", `Bearer ${options.token}`); headers.set("User-Agent", "RepoLore/0.3");
       return options.fetch(input, { ...init, headers, redirect: "error" });
     };
-    try { const report = await collectReport(repository, { fetch: fetcher, now: options.now(), signal: deadline(24_000) }); await recordIndexed(options.store, report); captured++; }
+    try { const report = await collectReport(repository, { fetch: fetcher, now: options.now(), signal: deadline(24_000) }); await recordIndexed(options.store, report); captured++;
+      try { const stars = await captureStars(report.repository, { fetch: options.fetch, now: options.now(), token: options.token, signal: deadline(8000) }); await options.store.put(`stars:${report.repository.toLowerCase()}`, JSON.stringify(stars)); } catch { /* Retain the last public aggregate history. */ } }
     catch { /* Keep the last good snapshot and continue the bounded batch. */ }
   }
   catalog.lastRefresh = new Date(options.now()).toISOString(); catalog.status = "active";

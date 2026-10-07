@@ -49,7 +49,7 @@ export function hook(report: Report): string {
   return [lead ? `@${lead.author.login} authored ${lead.merges} of ${report.coverage.mergedObserved} observed merges.` : "Every repo has a cast. This one's next chapter is still unwritten.",
     oldest?.status === "observed" ? `${oldest.headline} is still part of the plot: ${oldest.value}.` : ""].filter(Boolean).join(" ");
 }
-export type LeaderboardRow = { repository: string; person: Author | null; score: number; value: string; source: string; capturedAt: string; sampled: boolean; inspected: number; repoOwner?: Author | null; stars?: number | null; language?: string | null };
+export type LeaderboardRow = { repository: string; person: Author | null; score: number; value: string; source: string; capturedAt: string; sampled: boolean; inspected: number; repoOwner?: Author | null; stars?: number | null; language?: string | null; cast?: Author[]; castCount?: number; starAdded?: number; starDays?: number };
 export function leaderboard(reports: Report[], category: string): LeaderboardRow[] {
   if (!CATEGORIES[category]) return [];
   const rows: LeaderboardRow[] = [];
@@ -63,9 +63,9 @@ export function leaderboard(reports: Report[], category: string): LeaderboardRow
       category === "oldest" && pr ? Math.floor((Date.parse(report.capturedAt) - pr.createdAt) / 86_400_000) :
       category === "fast" && pr && pr.mergedAt !== null ? pr.mergedAt - pr.createdAt : undefined;
     if (score === undefined || !Number.isFinite(score)) continue;
-    rows.push({ repository: report.repository, person: category === "cast" ? report.profile?.owner ?? null : awardPerson(report, category), score,
+    rows.push({ repository: report.repository, person: category === "cast" ? null : awardPerson(report, category), score,
       value: award.value, source: award.evidence[0]?.url ?? report.url, capturedAt: report.capturedAt,
-      sampled: !report.coverage.periodComplete, inspected: report.coverage.detailsRead, repoOwner: report.profile?.owner ?? null, stars: report.profile?.stars ?? null, language: report.profile?.language ?? null });
+      sampled: !report.coverage.periodComplete, inspected: report.coverage.detailsRead, cast: category === "cast" ? contributors(report).slice(0, 3).map(row => row.author) : undefined, castCount: category === "cast" ? contributors(report).length : undefined, repoOwner: report.profile?.owner ?? null, stars: report.profile?.stars ?? null, language: report.profile?.language ?? null });
   }
   return rows.sort((a, b) => (category === "fast" ? a.score - b.score : b.score - a.score) || a.repository.localeCompare(b.repository));
 }
