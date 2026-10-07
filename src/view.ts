@@ -73,8 +73,8 @@ export function boardMarkup(rows: LeaderboardRow[]): string {
   }).join("")}</ol>`;
 }
 function repoChipImage(row: LeaderboardRow): string {
- if(row.repoImageUrl) return `<img src="/_repo-art${repositoryPath(row.repository)}" alt="" width="22" height="22" loading="lazy">`;
  if(row.repoOrganization && row.repoOwner) return `<img src="${avatarPath(row.repoOwner,64)}" width="22" height="22" alt="">`;
+ if(row.repoImageUrl) return `<img src="/_repo-art${repositoryPath(row.repository)}" alt="" width="22" height="22" loading="lazy">`;
  return `<span class="repo-monogram" aria-hidden="true">${escapeHtml(row.repository.split("/")[1].slice(0,2).toUpperCase())}</span>`;
 }
 export function suggestionsMarkup(rows: LeaderboardRow[]): string {
@@ -95,22 +95,18 @@ export { hook };
 
 export type Champion = { category: string; row: LeaderboardRow };
 export function championsMarkup(champions: Champion[]): string {
-  if (!champions.length) return "";
-  const ordered = champions;
-  return ordered.map(({category,row}) => {
-    const people = row.cast ?? (row.person ? [row.person] : []);
-    const faces = people.slice(0,3).map(person => `<span class="portrait"><img src="${avatarPath(person,64)}" alt="@${escapeHtml(person.login)}" width="40" height="40" loading="lazy"></span>`).join("");
-    const words=row.value.split(" "),number=words.shift() ?? "",unit=words.join(" ");
-    const name = row.person ? "@"+row.person.login : row.headline ?? row.repository;
-    const identity=row.cast ? `<span class="champion-cast">${people.slice(0,3).map(person=>`<span><span class="portrait"><img src="${avatarPath(person,64)}" alt="" width="24" height="24" loading="lazy"></span><strong>@${escapeHtml(person.login)}</strong></span>`).join("")}</span>` : `<span class="champion-person">${faces}<strong>${escapeHtml(name)}</strong></span>`;
+  return champions.map(({category,row}) => {
+    const people=row.cast ?? (row.person ? [row.person] : []),[owner,repo]=row.repository.split("/");
+    const face=(person:Author)=>`<span class="portrait"><img src="${avatarPath(person,64)}" alt="" width="22" height="22" loading="lazy"></span>`;
+    const attribution=row.cast ? `<span class="champion-attribution-label">Top contributors</span><span class="champion-crew">${people.slice(0,3).map(person=>`<span class="champion-member">${face(person)}<span>@${escapeHtml(person.login)}</span></span>`).join("")}</span>` : row.person ? `<span class="champion-byline"><span class="champion-attribution-label">By</span>${face(row.person)}<span>@${escapeHtml(row.person.login)}</span>${row.person.bot ? '<span class="bot-label">bot</span>' : ""}</span>` : `<span class="champion-byline">${escapeHtml(row.headline ?? "")}</span>`;
+    const words=row.value.split(" "), number=row.value==="Under a minute" ? "<1" : words.shift() ?? "", unit=row.value==="Under a minute" ? "minute" : words.join(" ");
+    const numeric=Number(number.replaceAll(",","")),compact=Number.isFinite(numeric)&&numeric>=10000 ? new Intl.NumberFormat("en-US",{notation:"compact",maximumSignificantDigits:3}).format(numeric) : number;
     return `<a class="champion" data-category="${category}" href="/leaderboards/${category}" aria-label="${escapeHtml(CATEGORIES[category].name)}: ${escapeHtml(row.value)} in ${escapeHtml(row.repository)}. Open leaderboard.">
       <span class="champion-watermark" aria-hidden="true">${glyph(category)}</span>
-      <span class="champion-top"><span class="champion-art">${awardArtwork(category,"var(--champion-accent)").replaceAll("tile-","champion-tile-")}</span></span>
-      <span class="champion-label">${escapeHtml(CATEGORIES[category].name)}</span>
-      <span class="champion-score"><strong>${escapeHtml(number)}</strong><span>${escapeHtml(unit)}</span></span>
-      ${identity}
-      <span class="champion-repo">${row.repoOwner ? `<img src="${avatarPath(row.repoOwner,64)}" alt="" width="18" height="18" loading="lazy">` : glyph("github")}${escapeHtml(row.repository)}</span>
-      <span class="champion-link">Leaderboard ${glyph("arrow")}</span>
+      <span class="champion-heading"><span class="champion-art">${awardArtwork(category,"var(--champion-accent)").replaceAll("tile-","champion-tile-")}</span><span class="champion-label">${escapeHtml(CATEGORIES[category].name)}</span></span>
+      <span class="champion-score"><strong><span class="champion-number-full">${escapeHtml(number)}</span><span class="champion-number-short">${escapeHtml(compact)}</span></strong><span>${escapeHtml(unit)}</span></span>
+      <span class="champion-identity"><span class="champion-project">${repoChipImage(row)}<span><span class="champion-owner">${escapeHtml(owner)} /</span><strong>${escapeHtml(repo)}</strong></span></span><span class="champion-attribution">${attribution}</span></span>
+      <span class="champion-link">View leaderboard ${glyph("arrow")}</span>
     </a>`;
   }).join("");
 }
