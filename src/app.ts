@@ -125,7 +125,17 @@ document.querySelectorAll<HTMLButtonElement>(".repo-chip").forEach(button => but
 window.addEventListener("popstate", () => {
   const repo = repositoryFromPath(location.pathname);
   if (repo) void load(repo, false);
-  else { ++generation; result.hidden = true; loading.hidden = true; document.documentElement.classList.remove("has-report"); (element("repo-lookup") as HTMLDetailsElement).open = true; }
+  else {
+    ++generation; result.hidden = true; loading.hidden = true; error.hidden = true;
+    document.documentElement.classList.remove("has-report"); element<HTMLDetailsElement>("repo-lookup").open = true;
+    document.title = "Repo Lore — your repo has lore";
+    element<HTMLLinkElement>("canonical").href = location.origin + "/";
+    element<HTMLMetaElement>("og-title").content = document.title;
+    element<HTMLMetaElement>("og-description").content = "The people, pull requests, and plot twists behind your favorite GitHub repo.";
+    element<HTMLMetaElement>("og-url").content = location.origin + "/";
+    element<HTMLMetaElement>("og-image").content = location.origin + "/_og/site.png";
+    element<HTMLMetaElement>("twitter-image").content = element<HTMLMetaElement>("og-image").content;
+  }
 });
 const bootstrap = document.getElementById("repo-data")?.textContent;
 if (bootstrap && bootstrap !== "null") {
