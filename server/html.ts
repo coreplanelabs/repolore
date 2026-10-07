@@ -8,9 +8,10 @@ function content(html: string, id: string, value: string): string {
 }
 function meta(html: string, id: string, value: string): string { return html.replace(new RegExp(`(<meta id="${id}"[^>]*content=")[^"]*(")`), (_, start: string, end: string) => start + escapeHtml(value) + end); }
 import { chartsMarkup } from "../src/charts.js";
+import type { CardStandings } from "../src/neighbors.js";
 import type { StarHistory } from "../src/star-history.js";
 import type { DailyPoint } from "../src/analytics.js";
-export function pageHtml(template: string, origin: string, report?: Report, board?: { category: string; rows: LeaderboardRow[]; cohort?: string; warming?: boolean; selected?: number; provisional?: boolean }, presentation?: { history: DailyPoint[]; comparison: LeaderboardRow[]; stars?: StarHistory | null }): string {
+export function pageHtml(template: string, origin: string, report?: Report, board?: { category: string; rows: LeaderboardRow[]; cohort?: string; warming?: boolean; selected?: number; provisional?: boolean }, presentation?: { history: DailyPoint[]; comparison: LeaderboardRow[]; stars?: StarHistory | null; neighbors?: CardStandings }): string {
   const title = report ? `${report.repository} — Repo Lore` : board ? `${CATEGORIES[board.category].name} — Repo Lore` : "Repo Lore — your repo has lore";
   const path = report ? repositoryPath(report.repository) : board ? `/leaderboards/${board.category}` : "/";
   const description = report ? hook(report) : board ? CATEGORIES[board.category].measure : "The people, pull requests, and plot twists behind your favorite GitHub repo.";
@@ -24,7 +25,7 @@ export function pageHtml(template: string, origin: string, report?: Report, boar
     html = content(html, "result-title", escapeHtml(report.repository)); html = content(html, "repo-description", escapeHtml(report.description));
     html = content(html, "repo-hook", escapeHtml(description)); html = content(html, "header-cast", castFaces(report));
     html = content(html, "insights", chartsMarkup(report, presentation?.history, presentation?.comparison, presentation?.stars));
-    html = content(html, "awards", cardsMarkup(report)); html = content(html, "standings", standingsMarkup(report));
+    html = content(html, "awards", cardsMarkup(report, presentation?.neighbors)); html = content(html, "standings", standingsMarkup(report));
     html = html.replace('<script id="repo-data" type="application/json">null</script>', `<script id="repo-data" type="application/json">${safeJson({ ...report, presentation })}</script>`);
     if (report.profile?.owner) html = html.replace('<img id="repo-avatar" alt="" width="96" height="96" hidden>', `<img id="repo-avatar" src="${avatarPath(report.profile.owner, 256)}" alt="${escapeHtml(report.repository.split("/")[0])}" width="96" height="96">`);
     html = content(html, "repo-meta", escapeHtml([report.profile?.stars !== null && report.profile?.stars !== undefined ? `${report.profile.stars.toLocaleString("en-US")} stars` : "", report.profile?.language ?? ""].filter(Boolean).join(" · ")));

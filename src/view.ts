@@ -1,3 +1,4 @@
+import type { CardStandings, Neighbors } from "./neighbors.js";
 import type { Author, Report } from "./core.js";
 import { avatarPath, awardPerson, CATEGORIES, contributors, hook, repositoryPath, type LeaderboardRow } from "./catalog.js";
 import { awardArtwork, ICONS } from "./icons.js";
@@ -7,22 +8,33 @@ export function glyph(name: string): string { const icon = ICONS[name]; return i
 export function portrait(person: Author, className = "portrait"): string {
   return `<a class="${className}" data-initial="${escapeHtml(person.login.slice(0, 2).toUpperCase())}" href="https://github.com/${encodeURIComponent(person.login)}" target="_blank" rel="noopener noreferrer" title="@${escapeHtml(person.login)}${person.bot ? " (bot)" : ""}"><img src="${avatarPath(person)}" alt="@${escapeHtml(person.login)}" width="64" height="64" loading="lazy"></a>`;
 }
-export function castFaces(report: Report): string {
-  const cast = contributors(report), shown = cast.slice(0, 3), rest = cast.length - shown.length;
+export function castFaces(report: Report, botsOnly = false): string {
+  const cast = contributors(report).filter(row => !botsOnly || row.author.bot), shown = cast.slice(0, 3), rest = cast.length - shown.length;
   return `<div class="avatar-stack">${shown.map(person => portrait(person.author)).join("")}${rest ? `<span class="portrait avatar-rest" title="${rest} other authors">+${rest}</span>` : ""}</div>`;
 }
-export function cardsMarkup(report: Report): string {
+export function cardsMarkup(report: Report, standings?: CardStandings): string {
   return report.awards.map(award => {
     const person = awardPerson(report, award.id);
     const art = award.id === "cast" ? castFaces(report) : `<span class="award-art">${awardArtwork(award.id, "var(--card-accent)")}</span>`;
     return `<article class="award ${award.status}" data-award="${award.id}" id="award-${award.id}">
-      <span class="award-watermark">${glyph(award.id)}</span><div class="award-header"><div class="award-label">${art}<span>${escapeHtml(award.name.toUpperCase())}</span></div>${person && award.id !== "cast" ? portrait(person, "portrait winner-portrait") : ""}</div>
+      <span class="award-watermark">${glyph(award.id)}</span><div class="award-header"><div class="award-label">${art}<span>${escapeHtml(award.name.toUpperCase())}</span>${award.id === "bots" ? `<div class="bot-crew">${castFaces(report, true)}</div>` : ""}</div>${person && !["cast", "bots"].includes(award.id) ? portrait(person, "portrait winner-portrait") : ""}</div>
       <h3>${escapeHtml(award.headline)}</h3><p class="award-value">${escapeHtml(award.value)}</p><p class="award-description">${escapeHtml(award.description)}</p>
+      ${nearbyMarkup(award.id, standings?.[award.id])}
       <p class="award-scope">${escapeHtml(award.scope)}</p>
       ${award.evidence.length ? `<details><summary>View the PR${award.evidence.length > 1 ? "s" : ""}</summary><ul>${award.evidence.map(pr => `<li><a href="${escapeHtml(pr.url)}" target="_blank" rel="noopener noreferrer">${glyph("github")} #${pr.number} ${escapeHtml(pr.title)}</a></li>`).join("")}</ul></details>` : ""}
       <a class="compare-link" href="/leaderboards/${award.id}">See the leaderboard ${glyph("arrow")}</a>
     </article>`;
   }).join("");
+}
+function nearbyMarkup(category: string, neighbors?: Neighbors | null): string {
+  if (!neighbors) return "";
+  const peer = (row: LeaderboardRow | null, label: string) => {
+    if (!row) return `<div class="rival-row edge"><span>${label === "Just ahead" ? "Leading this group" : "End of this group"}</span></div>`;
+    const direction = row.score === neighbors.score ? "Level with" : label;
+    const person = row.person ?? row.repoOwner;
+    return `<a class="rival-row" href="${repositoryPath(row.repository)}#award-${category}" aria-label="${direction}: ${row.person ? "@" + escapeHtml(row.person.login) + " in " : ""}${escapeHtml(row.repository)}, ${escapeHtml(row.value)}"><span class="rival-direction">${direction}</span><span class="rival-identity">${person ? `<img src="${avatarPath(person, 64)}" width="20" height="20" alt="" loading="lazy">` : ""}<span>${escapeHtml(row.repository)}</span></span><span class="rival-value">${escapeHtml(row.value)}</span></a>`;
+  };
+  return `<aside class="card-rivals" aria-label="Nearby repos in ${escapeHtml(CATEGORIES[category].name)}"><div class="rivals-heading"><a href="/leaderboards/${category}">${neighbors.tied ? "Tied " : ""}#${neighbors.rank} of ${neighbors.total}</a>${helpButton("Compared with saved repo snapshots, plus this repo. Equal scores share a rank and say Level with. Neighbors follow leaderboard order; each repo's sample limits apply.", "About this comparison", "Around your repo")}</div>${peer(neighbors.ahead, "Just ahead")}${peer(neighbors.behind, "Just behind")}</aside>`;
 }
 export function standingsMarkup(report: Report): string {
   const cast = contributors(report), bots = cast.filter(row => row.author.bot).reduce((sum, row) => sum + row.merges, 0);
@@ -39,12 +51,12 @@ export function boardMarkup(rows: LeaderboardRow[]): string {
     const repoIcon = row.repoOwner ? `<img class="repo-mini" src="${avatarPath(row.repoOwner, 64)}" alt="" width="18" height="18" loading="lazy">` : glyph("github");
     const growth = row.starAdded !== undefined ? `${glyph("trend")} +${row.starAdded.toLocaleString("en-US")} / ${row.starDays}d` : "";
     const metadata = [row.stars !== null && row.stars !== undefined ? `${glyph("star")} ${row.stars.toLocaleString("en-US")}` : "", growth, row.language ? escapeHtml(row.language) : ""].filter(Boolean).join('<span class="meta-separator">·</span>');
-    const faces = team ? `<div class="board-facepile avatar-stack">${row.cast!.map(person => portrait(person)).join("")}${(row.castCount ?? 0) > 3 ? `<span class="portrait avatar-rest">+${row.castCount! - 3}</span>` : ""}</div>` : row.person ? portrait(row.person) : `<span class="portrait avatar-rest">R</span>`;
+    const faces = team ? `<div class="board-facepile avatar-stack">${row.cast!.length ? row.cast!.map(person => portrait(person)).join("") : `<span class="board-crew-empty">${glyph("bots")}</span>`}${(row.castCount ?? 0) > 3 ? `<span class="portrait avatar-rest">+${row.castCount! - 3}</span>` : ""}</div>` : row.person ? portrait(row.person) : `<span class="portrait avatar-rest">R</span>`;
     const scoreParts = row.value.split(" "), number = scoreParts.shift() ?? "", unit = scoreParts.join(" ");
     const name = team ? `<a class="team-name" href="${repositoryPath(row.repository)}">${escapeHtml(row.repository)}</a>` : `<strong>${row.person ? `@${escapeHtml(row.person.login)}` : escapeHtml(row.repository)}${row.person?.bot ? `<span class="bot-label">bot</span>` : ""}</strong>`;
     const source = `<a class="board-source" href="${escapeHtml(row.source)}" target="_blank" rel="noopener noreferrer" aria-label="${team ? "Open repository evidence" : "Open the source PR"}">${glyph("github")}</a>`;
     const explanation = helpButton(scope + (row.starAdded !== undefined ? `\nStars added: ${row.starAdded.toLocaleString("en-US")} over ${row.starDays} days from GitHub's daily history. This counts additions, not net growth after unstars. GitHub's calendar boundaries apply.` : "\nStar history is not available for this snapshot yet."), "Explain this result");
-    return `<li class="${team ? "team-row" : "person-row"}"><span class="cast-rank">${index + 1}</span>${faces}<div class="board-person">${name}${team ? `<span class="team-caption">${repoIcon} Contributors</span>` : `<a class="board-repo" href="${repositoryPath(row.repository)}">${repoIcon}${escapeHtml(row.repository)}</a>`}<small class="repo-facts">${metadata}</small></div><div class="board-result"><div class="board-score"><strong>${escapeHtml(number)}</strong><span>${escapeHtml(unit)}</span></div><div class="board-actions">${explanation}${source}</div></div></li>`;
+    return `<li class="${team ? "team-row" : "person-row"}"><span class="cast-rank">${index + 1}</span>${faces}<div class="board-person">${name}${team ? `<span class="team-caption">${repoIcon} ${escapeHtml(row.crewLabel ?? "Contributors")}</span>` : `<a class="board-repo" href="${repositoryPath(row.repository)}">${repoIcon}${escapeHtml(row.repository)}</a>`}<small class="repo-facts">${metadata}</small></div><div class="board-result"><div class="board-score"><strong>${escapeHtml(number)}</strong><span>${escapeHtml(unit)}</span></div><div class="board-actions">${explanation}${source}</div></div></li>`;
 
   }).join("")}</ol>`;
 }

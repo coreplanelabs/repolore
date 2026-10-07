@@ -7,7 +7,8 @@ export const CATEGORIES: Record<string, { name: string; measure: string }> = {
   comments: { name: "Comment Magnet", measure: "Most inline review comments on one inspected PR" },
   cast: { name: "The Cast", measure: "Most distinct authors in each observed merge snapshot" },
   oldest: { name: "The Long Goodbye", measure: "Oldest open PR by calendar age" },
-  fast: { name: "Fastest Lap", measure: "Shortest observed opening-to-merge interval" }
+  fast: { name: "Fastest Lap", measure: "Shortest observed opening-to-merge interval" },
+  bots: { name: "Bot Party", measure: "Most observed merged PRs authored by GitHub bot accounts" }
 };
 export type Contributor = { author: Author; merges: number; share: number };
 export function contributors(report: Report): Contributor[] {
@@ -49,7 +50,7 @@ export function hook(report: Report): string {
   return [lead ? `@${lead.author.login} authored ${lead.merges} of ${report.coverage.mergedObserved} observed merges.` : "Every repo has a cast. This one's next chapter is still unwritten.",
     oldest?.status === "observed" ? `${oldest.headline} is still part of the plot: ${oldest.value}.` : ""].filter(Boolean).join(" ");
 }
-export type LeaderboardRow = { repository: string; person: Author | null; score: number; value: string; source: string; capturedAt: string; sampled: boolean; inspected: number; repoOwner?: Author | null; stars?: number | null; language?: string | null; cast?: Author[]; castCount?: number; starAdded?: number; starDays?: number };
+export type LeaderboardRow = { repository: string; person: Author | null; score: number; value: string; source: string; capturedAt: string; sampled: boolean; inspected: number; repoOwner?: Author | null; stars?: number | null; language?: string | null; cast?: Author[]; castCount?: number; starAdded?: number; starDays?: number; crewLabel?: string };
 export function leaderboard(reports: Report[], category: string): LeaderboardRow[] {
   if (!CATEGORIES[category]) return [];
   const rows: LeaderboardRow[] = [];
@@ -60,12 +61,13 @@ export function leaderboard(reports: Report[], category: string): LeaderboardRow
     const detail = report.facts.details.find(pr => pr.number === award.evidence[0]?.number);
     const score = category === "merge" ? contributors(report)[0]?.merges : category === "delete" ? detail?.deletions :
       category === "comments" ? detail?.reviewComments : category === "cast" ? contributors(report).length :
+      category === "bots" ? contributors(report).filter(row => row.author.bot).reduce((sum, row) => sum + row.merges, 0) :
       category === "oldest" && pr ? Math.floor((Date.parse(report.capturedAt) - pr.createdAt) / 86_400_000) :
       category === "fast" && pr && pr.mergedAt !== null ? pr.mergedAt - pr.createdAt : undefined;
     if (score === undefined || !Number.isFinite(score)) continue;
-    rows.push({ repository: report.repository, person: category === "cast" ? null : awardPerson(report, category), score,
+    rows.push({ repository: report.repository, person: ["cast", "bots"].includes(category) ? null : awardPerson(report, category), score,
       value: award.value, source: award.evidence[0]?.url ?? report.url, capturedAt: report.capturedAt,
-      sampled: !report.coverage.periodComplete, inspected: report.coverage.detailsRead, cast: category === "cast" ? contributors(report).slice(0, 3).map(row => row.author) : undefined, castCount: category === "cast" ? contributors(report).length : undefined, repoOwner: report.profile?.owner ?? null, stars: report.profile?.stars ?? null, language: report.profile?.language ?? null });
+      sampled: !report.coverage.periodComplete, inspected: report.coverage.detailsRead, cast: ["cast", "bots"].includes(category) ? contributors(report).filter(row => category !== "bots" || row.author.bot).slice(0, 3).map(row => row.author) : undefined, castCount: ["cast", "bots"].includes(category) ? contributors(report).filter(row => category !== "bots" || row.author.bot).length : undefined, crewLabel: category === "bots" ? "Bot accounts" : "Contributors", repoOwner: report.profile?.owner ?? null, stars: report.profile?.stars ?? null, language: report.profile?.language ?? null });
   }
   return rows.sort((a, b) => (category === "fast" ? a.score - b.score : b.score - a.score) || a.repository.localeCompare(b.repository));
 }

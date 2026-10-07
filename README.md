@@ -37,6 +37,7 @@ another port. Saved snapshots live in `.data`, which is ignored by Git.
 | The Cast | Distinct author accounts, including bots; top three photos and a rest count |
 | The Long Goodbye | Oldest open PR by calendar age |
 | Fastest Lap | Shortest observed interval between PR opening and merge |
+| Bot Party | Number of observed merged PRs authored by GitHub bot accounts |
 
 These do not measure developer skill, AI authorship, or contribution policy.
 They use bounded 90-day snapshots, not lifetime totals. The main-character
@@ -51,7 +52,7 @@ eligible inspected merges. See [METHOD.md](METHOD.md) for calculations and limit
 ## Pages and previews
 
 - `/owner/repo`: server-rendered result, canonical URL, repo identity, and metadata.
-- `/leaderboards/delete`: cross-repo Delete Club; the other five categories have pages too.
+- `/leaderboards/delete`: cross-repo Delete Club; the other six categories have pages too.
 - `/_og/owner/repo.png?v=<capture timestamp>`: a 1200 × 630 PNG for that snapshot.
 - `/_avatar/u/<id>` and `/_avatar/in/<app-id>`: bounded GitHub photo proxies.
 - `/sitemap.xml`: known popular repo pages and leaderboard pages.
@@ -172,3 +173,14 @@ wrangler kv bulk put .data/star-seed.json --binding REPORTS --remote
 
 Hover or keyboard focus opens positioned explanations on desktop. Phones and
 touch devices use a tap-open modal with a close button and Escape support.
+
+Award cards lead each repo page. Their small comparison strip shows the adjacent
+repos in the saved index, plus an on-demand repo when relevant. Rankings use the
+award's numeric measurement: larger values lead except Fastest Lap, where less
+time leads. Equal scores share a competition rank and say “Level with.” Different
+capture times and listing limits still apply; these are snapshot comparisons.
+
+Bot Party counts bot-authored merged PRs in the 90-day snapshot, not individual
+commits, merge actors, bot-written lines, or AI-written code. It shows the share
+of observed merges and links example bot PRs. Missing authors remain unknown.
+The cross-repo board ranks bot merge counts and shows the repo's bot crew.

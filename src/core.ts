@@ -146,6 +146,13 @@ export function buildReport(input: {
     awards.push({ id: "fast", name: "Fastest Lap", icon: "fast", status: "observed", headline: `PR #${fastest.number}`, value,
       description: "Blink and it merged. Shortest PR opening-to-merge time observed. Includes draft time, waiting and automation. This is not time spent coding.", scope: mergeScope, evidence: [fastest] });
   } else awards.push(empty("fast", "Fastest Lap", "fast", "No recent merge with a valid opening-to-merge interval was found.", mergeScope));
+  const botPulls = merged.filter(pr => pr.author?.bot === true), unknownAuthors = merged.filter(pr => !pr.author).length;
+  awards.push(merged.length ? { id: "bots", name: "Bot Party", icon: "bots", status: "observed",
+    headline: botPulls.length ? `${Math.round(botPulls.length / merged.length * 100)}% bot cameos` : "No bot accounts found",
+    value: `${botPulls.length} bot-authored merge${botPulls.length === 1 ? "" : "s"}`,
+    description: botPulls.length ? `The automation crew put in a shift. ${botPulls.length} of ${merged.length} observed merges came from GitHub bot accounts.` : unknownAuthors ? "Some author records are missing. No bot accounts appear in the readable ones." : "The bots sat this round out. No bot-authored merges in this snapshot.",
+    scope: `${mergeScope} GitHub account types, not AI authorship.${unknownAuthors ? ` ${unknownAuthors} merge${unknownAuthors === 1 ? " has" : "s have"} no readable author.` : ""}`,
+    evidence: botPulls.slice(0, 4) } : empty("bots", "Bot Party", "bots", "No recent merges to invite to the party.", mergeScope));
   const summary = `I found ${merged.length} PR${merged.length === 1 ? "" : "s"} merged in the past 90 days within ${closed.length} recently updated closed PRs. ${top ? `@${top.author.login} authored ${top.pulls.length} of those merges. ` : ""}I inspected ${inspected.length} selected PRs for diff and inline-review counts. These awards describe the observed snapshot, not developer skill or the project's contribution policy.`;
   return { version: 1, ...(input.profile ? { profile: input.profile } : {}), repository, url: `https://github.com/${repository}`, description: input.description,
     capturedAt: new Date(now).toISOString(), summary, awards, notes: input.notes,

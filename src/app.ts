@@ -6,6 +6,7 @@ import { chartsMarkup } from "./charts.js";
 import type { DailyPoint } from "./analytics.js";
 import type { LeaderboardRow } from "./catalog.js";
 import { setupHelp } from "./help.js";
+import type { CardStandings } from "./neighbors.js";
 import type { StarHistory } from "./star-history.js";
 import { resolveTheme, themePreference, type ThemePreference } from "./theme.js";
 
@@ -19,7 +20,7 @@ setupHelp();
 const form = element<HTMLFormElement>("repo-form"), input = element<HTMLInputElement>("repo-input"), submit = element<HTMLButtonElement>("submit-button");
 const result = element("result"), loading = element("loading"), error = element("error");
 const cache = new Map<string, Report>();
-const presentationCache = new Map<string, { history: DailyPoint[]; comparison: LeaderboardRow[]; stars?: StarHistory | null }>();
+const presentationCache = new Map<string, { history: DailyPoint[]; comparison: LeaderboardRow[]; stars?: StarHistory | null; neighbors?: CardStandings }>();
 let generation = 0;
 const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
 let preference: ThemePreference = "system";
@@ -55,7 +56,7 @@ function celebrate(): void {
 function imageFallbacks(): void {
   document.querySelectorAll<HTMLImageElement>(".portrait img, #repo-avatar").forEach(image => image.addEventListener("error", () => { image.hidden = true; }));
 }
-function render(report: Report, presentation?: { history: DailyPoint[]; comparison: LeaderboardRow[]; stars?: StarHistory | null }): void {
+function render(report: Report, presentation?: { history: DailyPoint[]; comparison: LeaderboardRow[]; stars?: StarHistory | null; neighbors?: CardStandings }): void {
   document.documentElement.classList.add("has-report");
   input.value = report.repository;
   element("result-title").textContent = report.repository;
@@ -73,7 +74,7 @@ function render(report: Report, presentation?: { history: DailyPoint[]; comparis
   const c = report.coverage;
   element("scope-text").textContent = `90-DAY WINDOW · ${c.mergedObserved} OBSERVED MERGES · ${c.detailsRead} PR DIFFS INSPECTED`;
   element("read-time").textContent = `READ ${new Date(report.capturedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}`;
-  element("awards").innerHTML = cardsMarkup(report);
+  element("awards").innerHTML = cardsMarkup(report, presentation?.neighbors);
   element("standings").innerHTML = standingsMarkup(report);
   element("coverage-text").textContent = `Read ${c.closedRead} recently updated closed PRs and ${c.openRead} oldest open PRs. ${c.periodComplete ? "The listing covered the 90-day merge window." : "The closed-PR listing is a bounded sample; some merges can be missing."} Diff awards cover ${c.detailsRead} of ${c.detailsRequested} selected recent merged PRs.`;
   element("notes").replaceChildren(...report.notes.map(note => { const li = document.createElement("li"); li.textContent = note; return li; }));
@@ -101,13 +102,13 @@ async function load(raw: string, navigate = true): Promise<void> {
   let line = 0; element("loading-whimsy").textContent = loadingLines[0]; element("progress-text").textContent = "Meeting the cast and reading the plot…";
   const timer = window.setInterval(() => { if (run === generation) element("loading-whimsy").textContent = loadingLines[++line % loadingLines.length]; }, 2200);
   try {
-    let details: { history: DailyPoint[]; comparison: LeaderboardRow[]; stars?: StarHistory | null } | undefined;
+    let details: { history: DailyPoint[]; comparison: LeaderboardRow[]; stars?: StarHistory | null; neighbors?: CardStandings } | undefined;
     let expected = repository;
     let report = cache.get(repository.toLowerCase()); details = presentationCache.get(repository.toLowerCase());
     if (!report) {
       const response = await fetch(`/api/repos${repositoryPath(repository)}`, { signal: AbortSignal.timeout(30_000) });
       if (response.redirected) { expected = repositoryFromPath(new URL(response.url).pathname.slice(10)) ?? repository; }
-      const body = await response.json() as { error?: string; presentation?: { history: DailyPoint[]; comparison: LeaderboardRow[]; stars?: StarHistory | null } };
+      const body = await response.json() as { error?: string; presentation?: { history: DailyPoint[]; comparison: LeaderboardRow[]; stars?: StarHistory | null; neighbors?: CardStandings } };
       if (!response.ok) throw new Error(body.error ?? "This round could not be loaded. Try again later.");
       report = replayReport(body); details = body.presentation; if (details) presentationCache.set(report.repository.toLowerCase(), details);
     }
@@ -142,7 +143,7 @@ window.addEventListener("popstate", () => {
 });
 const bootstrap = document.getElementById("repo-data")?.textContent;
 if (bootstrap && bootstrap !== "null") {
-  try { const data = JSON.parse(bootstrap) as { error?: string; presentation?: { history: DailyPoint[]; comparison: LeaderboardRow[]; stars?: StarHistory | null } }; if (typeof data.error === "string") { element("error-text").textContent = data.error; error.hidden = false; } else { const report = replayReport(data); if (data.presentation) presentationCache.set(report.repository.toLowerCase(), data.presentation); cache.set(report.repository.toLowerCase(), report); render(report, data.presentation); } }
+  try { const data = JSON.parse(bootstrap) as { error?: string; presentation?: { history: DailyPoint[]; comparison: LeaderboardRow[]; stars?: StarHistory | null; neighbors?: CardStandings } }; if (typeof data.error === "string") { element("error-text").textContent = data.error; error.hidden = false; } else { const report = replayReport(data); if (data.presentation) presentationCache.set(report.repository.toLowerCase(), data.presentation); cache.set(report.repository.toLowerCase(), report); render(report, data.presentation); } }
   catch { element("error-text").textContent = "This snapshot could not be read. Enter the repo to try again."; error.hidden = false; }
 } else {
   const initial = repositoryFromPath(location.pathname) ?? new URL(location.href).searchParams.get("repo");

@@ -3,6 +3,7 @@ import { CATEGORIES, leaderboard, repositoryFromPath, repositoryPath } from "../
 import { cohortReports, readCatalog, readHistory, recordIndexed } from "./indexing.js";
 import { captureStars, readStars } from "./stars.js";
 import { starMetric } from "../src/star-history.js";
+import { cardStandings } from "../src/neighbors.js";
 import { relativeRows } from "../src/analytics.js";
 import { pageHtml, safeJson } from "./html.js";
 import { boardCard, ogSvg, reportCard, siteCard, type OgCard } from "./og.js";
@@ -71,8 +72,8 @@ export function createHandler(options: ServerOptions): (request: Request) => Pro
     }));
   }
   async function presentation(report: Report) {
-    const history = await readHistory(options.store, report.repository), comparison = relativeRows(report, await reports(), "comments");
-    return { history, comparison, stars: await readStars(options.store, report.repository) };
+    const baseline = await reports(), history = await readHistory(options.store, report.repository), comparison = relativeRows(report, baseline, "comments");
+    return { history, comparison, neighbors: cardStandings(report, baseline), stars: await readStars(options.store, report.repository) };
   }
   async function avatar(id: string, size: number): Promise<{ bytes: Uint8Array; type: string } | null> {
     const result = await options.fetch(`https://avatars.githubusercontent.com${id}?s=${size}&v=4`, { redirect: "error", signal: deadline(5000), headers: { Accept: "image/png,image/jpeg" } });

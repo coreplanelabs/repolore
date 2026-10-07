@@ -87,7 +87,7 @@ test("repeated previews rasterize once and keep the same source snapshot", async
 });
 test("every leaderboard's declared OG path returns a PNG", async () => {
   const { options } = setup(), handler = createHandler(options);
-  for (const category of ["merge", "delete", "comments", "cast", "oldest", "fast"]) {
+  for (const category of ["merge", "delete", "comments", "cast", "oldest", "fast", "bots"]) {
     const response = await handler(new Request(`https://repolore.fun/_og/leaderboards/${category}.png`));
     assert.equal(response.status, 200, category); assert.equal(response.headers.get("Content-Type"), "image/png");
   }
