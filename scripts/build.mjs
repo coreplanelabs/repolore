@@ -1,5 +1,5 @@
 import { copyFile, cp, mkdir, readdir } from "node:fs/promises";
-await Promise.all(["index.html", "styles.css", "favicon.svg", "_headers", ".assetsignore"].map(file => copyFile(new URL(`../public/${file}`, import.meta.url), new URL(`../dist/${file}`, import.meta.url))));
+await Promise.all(["index.html", "styles.css", "theme-init.js", "favicon.svg", "_headers", ".assetsignore"].map(file => copyFile(new URL(`../public/${file}`, import.meta.url), new URL(`../dist/${file}`, import.meta.url))));
 await cp(new URL("../public/assets/", import.meta.url), new URL("../dist/assets/", import.meta.url), { recursive: true });
 const examples = new URL("../public/examples/", import.meta.url);
 try {

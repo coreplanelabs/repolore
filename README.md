@@ -184,3 +184,22 @@ Bot Party counts bot-authored merged PRs in the 90-day snapshot, not individual
 commits, merge actors, bot-written lines, or AI-written code. It shows the share
 of observed merges and links example bot PRs. Missing authors remain unknown.
 The cross-repo board ranks bot merge counts and shows the repo's bot crew.
+
+## Navigation and mobile behavior
+
+Repo links, award categories, and Trending/Top stars switches navigate within
+the current page. Direct URLs still render on the server for previews and
+indexing. Back/forward navigation, canonical metadata, and award fragments remain
+usable. The saved theme is applied before styles paint on a fresh document.
+
+Homepage suggestions are the top three Merge Machine results within the
+Trending cohort; missing growth data uses the same saved-repo fallback as the
+boards. Confetti celebrates a successful submission, or the first visit to a
+repo with a positive top-ten award result. Returning to a cached result does
+not replay it. Reduced-motion preferences suppress confetti and hover motion.
+
+The mobile header follows scroll direction with small thresholds to avoid
+flicker. Scrolling retains browser-native inertia. Input text is at least 16px
+to avoid iOS focus zoom; the mobile viewport and touch settings disable page
+zoom where supported by the browser. Safe-area padding protects header/footer
+controls. Only award artwork and the brand logo rotate on hover.

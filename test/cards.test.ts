@@ -39,3 +39,10 @@ test("adjacent ties share rank and say Level with, retaining the repo award link
   const html = cardsMarkup(mine, standings);
   assert.match(html, /Level with/); assert.match(html, /Tied #1 of 3/); assert.match(html, /\/alpha\/repo#award-bots/);
 });
+import { topTenResult } from "../src/celebration.js";
+test("celebration eligibility requires a top-ten observed result, not just any loaded repo", () => {
+  assert.equal(topTenResult(), false);
+  assert.equal(topTenResult({ bots: { rank: 1, total: 20, score: 0, tied: true, ahead: null, behind: null } }), false);
+  assert.equal(topTenResult({ merge: { rank: 11, total: 100, score: 42, tied: false, ahead: null, behind: null } }), false);
+  assert.equal(topTenResult({ merge: { rank: 10, total: 100, score: 42, tied: false, ahead: null, behind: null } }), true);
+});

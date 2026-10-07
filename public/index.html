@@ -18,11 +18,12 @@
   <meta property="og:image:alt" content="Repo Lore: the cast, pull requests, and plot twists behind a GitHub repository">
   <meta id="twitter-image" name="twitter:image" content="https://repolore.fun/_og/site.png">
   <title>Repo Lore — your repo has lore</title>
+  <script src="/theme-init.js"></script>
   <link rel="stylesheet" href="/styles.css">
   <script type="module" src="/app.js"></script>
 </head>
 <body>
-  <header class="masthead"><a class="brand" href="/" aria-label="Repo Lore home"><span class="brand-icon" aria-hidden="true">R</span> REPO LORE<span class="beta">BETA</span></a><div class="header-actions"><a class="leaderboards-link" href="/leaderboards/comments">Leaderboards</a><div class="theme-picker" role="group" aria-label="Color theme"><button type="button" data-theme-choice="light" aria-label="Light" aria-pressed="false"><span data-icon="sun"></span></button><button type="button" data-theme-choice="dark" aria-label="Dark" aria-pressed="false"><span data-icon="moon"></span></button><button type="button" data-theme-choice="system" aria-label="System" aria-pressed="true"><span data-icon="system"></span></button></div></div></header>
+  <header class="masthead"><a class="brand" href="/" aria-label="Repo Lore home"><span class="brand-icon" aria-hidden="true">R</span> REPO LORE<span class="beta">BETA</span></a><div class="header-actions"><a class="leaderboards-link" href="/leaderboards/comments" aria-label="Leaderboards"><span data-icon="leaderboards"></span><span class="leaderboards-text">Leaderboards</span></a><div class="theme-picker" role="group" aria-label="Color theme"><button type="button" data-theme-choice="light" aria-label="Light" aria-pressed="false"><span data-icon="sun"></span></button><button type="button" data-theme-choice="dark" aria-label="Dark" aria-pressed="false"><span data-icon="moon"></span></button><button type="button" data-theme-choice="system" aria-label="System" aria-pressed="true"><span data-icon="system"></span></button></div></div></header>
   <main>
     <section class="hero" aria-labelledby="hero-title">
 
@@ -36,7 +37,7 @@
         <button id="submit-button" type="submit">Show repo <span data-icon="arrow"></span></button>
       </form>
       </details>
-      <div class="try-row"><span>TRY A REPO</span><button class="repo-chip" data-repo="pytest-dev/pytest">pytest</button><button class="repo-chip" data-repo="vitejs/vite">vite</button><button class="repo-chip" data-repo="pallets/itsdangerous">itsdangerous</button></div>
+      <div id="repo-suggestions" class="try-row"></div>
       <p class="fine-print">No sign-up. No private data. Reads a recent snapshot from GitHub.</p>
       <div id="loading" class="loading" role="status" aria-live="polite" hidden><div class="shuffle-deck" aria-hidden="true"><span data-icon="merge"></span><span data-icon="delete"></span><span data-icon="fast"></span></div><div class="loading-copy"><strong id="loading-whimsy">Shuffling the repo lore…</strong><span id="progress-text">Finding your repo…</span></div></div>
       <div id="error" class="error" role="alert" hidden><strong>This round did not load.</strong><p id="error-text"></p></div>
@@ -55,6 +56,8 @@
   <section id="board" class="board" hidden><div id="board-watermark" class="board-watermark" aria-hidden="true"></div><div id="cohort-controls" class="cohort-controls"></div><div class="board-heading"><div id="board-emblem" class="board-emblem" aria-hidden="true"></div><div><h1 id="board-title"></h1><p id="board-description"></p></div></div><nav id="board-navigation" class="board-navigation" aria-label="Award leaderboards"></nav><div id="board-rows"></div><p class="board-note">Compared using bounded 90-day snapshots. Diff awards cover up to ten inspected merged PRs per repo and include all file types. Bots count too. 🤖 Read dates stay with each result.</p></section>
   </main>
   <footer class="site-footer"><span>Built for fun by <a href="https://polylane.com/?utm_source=repo-lore" target="_blank" rel="noopener noreferrer">Polylane</a>.</span><a href="https://github.com/coreplanelabs/repolore" target="_blank" rel="noopener noreferrer"><span data-icon="github"></span> View the source</a></footer>
+  <script id="home-data" type="application/json">null</script>
+  <script id="board-data" type="application/json">null</script>
   <script id="repo-data" type="application/json">null</script>
 </body>
 </html>

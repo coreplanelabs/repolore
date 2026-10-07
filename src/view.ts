@@ -34,7 +34,7 @@ function nearbyMarkup(category: string, neighbors?: Neighbors | null): string {
     const person = row.person ?? row.repoOwner;
     return `<a class="rival-row" href="${repositoryPath(row.repository)}#award-${category}" aria-label="${direction}: ${row.person ? "@" + escapeHtml(row.person.login) + " in " : ""}${escapeHtml(row.repository)}, ${escapeHtml(row.value)}"><span class="rival-direction">${direction}</span><span class="rival-identity">${person ? `<img src="${avatarPath(person, 64)}" width="20" height="20" alt="" loading="lazy">` : ""}<span>${escapeHtml(row.repository)}</span></span><span class="rival-value">${escapeHtml(row.value)}</span></a>`;
   };
-  return `<aside class="card-rivals" aria-label="Nearby repos in ${escapeHtml(CATEGORIES[category].name)}"><div class="rivals-heading"><a href="/leaderboards/${category}">${neighbors.tied ? "Tied " : ""}#${neighbors.rank} of ${neighbors.total}</a>${helpButton("Compared with saved repo snapshots, plus this repo. Equal scores share a rank and say Level with. Neighbors follow leaderboard order; each repo's sample limits apply.", "About this comparison", "Around your repo")}</div>${peer(neighbors.ahead, "Just ahead")}${peer(neighbors.behind, "Just behind")}</aside>`;
+  return `<aside class="card-rivals" aria-label="Nearby repos in ${escapeHtml(CATEGORIES[category].name)}"><div class="rivals-heading"><a href="/leaderboards/${category}">${neighbors.tied ? "Tied " : ""}#${neighbors.rank} of ${neighbors.total}</a>${helpButton("Ranks: Saved repo snapshots\nTies: Same score, same rank\nCoverage: Each repo's sample applies", "About this comparison", "Around your repo")}</div>${peer(neighbors.ahead, "Just ahead")}${peer(neighbors.behind, "Just behind")}</aside>`;
 }
 export function standingsMarkup(report: Report): string {
   const cast = contributors(report), bots = cast.filter(row => row.author.bot).reduce((sum, row) => sum + row.merges, 0);
@@ -47,7 +47,7 @@ export function helpButton(text: string, label: string, title = "Behind the numb
 export function boardMarkup(rows: LeaderboardRow[]): string {
   if (!rows.length) return `<p class="board-empty">The first cast is being indexed. Come back for the opening credits.</p>`;
   return `<ol class="leaderboard-list">${rows.map((row, index) => {
-    const team = Boolean(row.cast), scope = `Read ${row.capturedAt.slice(0, 10)}. ${row.inspected} PRs inspected. ${row.sampled ? "The merge listing is sampled; some merges may be missing." : "The merge listing covers the window."}`;
+    const team = Boolean(row.cast), scope = `Read: ${row.capturedAt.slice(0, 10)}\nPRs inspected: ${row.inspected}\nCoverage: ${row.sampled ? "Sampled merges" : "Full merge window"}`;
     const repoIcon = row.repoOwner ? `<img class="repo-mini" src="${avatarPath(row.repoOwner, 64)}" alt="" width="18" height="18" loading="lazy">` : glyph("github");
     const growth = row.starAdded !== undefined ? `${glyph("trend")} +${row.starAdded.toLocaleString("en-US")} / ${row.starDays}d` : "";
     const metadata = [row.stars !== null && row.stars !== undefined ? `${glyph("star")} ${row.stars.toLocaleString("en-US")}` : "", growth, row.language ? escapeHtml(row.language) : ""].filter(Boolean).join('<span class="meta-separator">·</span>');
@@ -55,10 +55,19 @@ export function boardMarkup(rows: LeaderboardRow[]): string {
     const scoreParts = row.value.split(" "), number = scoreParts.shift() ?? "", unit = scoreParts.join(" ");
     const name = team ? `<a class="team-name" href="${repositoryPath(row.repository)}">${escapeHtml(row.repository)}</a>` : `<strong>${row.person ? `@${escapeHtml(row.person.login)}` : escapeHtml(row.repository)}${row.person?.bot ? `<span class="bot-label">bot</span>` : ""}</strong>`;
     const source = `<a class="board-source" href="${escapeHtml(row.source)}" target="_blank" rel="noopener noreferrer" aria-label="${team ? "Open repository evidence" : "Open the source PR"}">${glyph("github")}</a>`;
-    const explanation = helpButton(scope + (row.starAdded !== undefined ? `\nStars added: ${row.starAdded.toLocaleString("en-US")} over ${row.starDays} days from GitHub's daily history. This counts additions, not net growth after unstars. GitHub's calendar boundaries apply.` : "\nStar history is not available for this snapshot yet."), "Explain this result");
+    const explanation = helpButton(scope + (row.starAdded !== undefined ? `\nStars added: +${row.starAdded.toLocaleString("en-US")} / ${row.starDays}d\nUnstars not subtracted.` : "\nStars added: Not available"), "Explain this result");
     return `<li class="${team ? "team-row" : "person-row"}"><span class="cast-rank">${index + 1}</span>${faces}<div class="board-person">${name}${team ? `<span class="team-caption">${repoIcon} ${escapeHtml(row.crewLabel ?? "Contributors")}</span>` : `<a class="board-repo" href="${repositoryPath(row.repository)}">${repoIcon}${escapeHtml(row.repository)}</a>`}<small class="repo-facts">${metadata}</small></div><div class="board-result"><div class="board-score"><strong>${escapeHtml(number)}</strong><span>${escapeHtml(unit)}</span></div><div class="board-actions">${explanation}${source}</div></div></li>`;
 
   }).join("")}</ol>`;
+}
+export function suggestionsMarkup(rows: LeaderboardRow[]): string {
+  if (!rows.length) return "";
+  return `<span>TRY A REPO</span>${rows.slice(0, 3).map(row => `<button class="repo-chip" data-repo="${escapeHtml(row.repository)}" aria-label="Look up ${escapeHtml(row.repository)}">${row.repoOwner ? `<img src="${avatarPath(row.repoOwner, 64)}" width="18" height="18" alt="">` : glyph("github")}${escapeHtml(row.repository.split("/")[1])}</button>`).join("")}`;
+}
+export function cohortMarkup(board: { category: string; cohort?: string; provisional?: boolean; selected?: number; warming?: boolean }): string {
+  const cohort = board.cohort ?? "trending";
+  const help = `Trending: Up to 20 repos with the most new stars in 30 days.\n\nTop stars: ${board.provisional ? `${board.selected ?? 8} saved repos for now. Top-100 star index comes next.` : "The 100 most-starred public repos."}\n\nRanks follow the selected award.${board.warming ? "\nStar history pending; showing saved repos." : ""}`;
+  return `<span class="cohort-label">EXPLORE</span><div class="cohort-switch"><a href="/leaderboards/${board.category}"${cohort === "trending" ? ' aria-current="page"' : ""}>${glyph("trend")}<span>Trending</span></a><a href="/leaderboards/${board.category}?cohort=top"${cohort === "top" ? ' aria-current="page"' : ""}>${glyph("star")}<span>Top stars</span></a></div>${helpButton(help, "How repo pools are chosen", "Choose your league")}`;
 }
 export function navigationMarkup(active?: string, cohort = "trending"): string { return Object.entries(CATEGORIES).map(([id, category]) => `<a href="/leaderboards/${id}${cohort === "top" ? "?cohort=top" : ""}" data-category="${id}"${active === id ? ' aria-current="page"' : ""}>${glyph(id)}<span>${escapeHtml(category.name)}</span></a>`).join(""); }
 export { hook };

@@ -1,10 +1,12 @@
 import { parseRepository, replayReport, type Report } from "./core.js";
-import { avatarPath, repositoryFromPath, repositoryPath } from "./catalog.js";
-import { cardsMarkup, standingsMarkup, castFaces, hook } from "./view.js";
+import { avatarPath, CATEGORIES, repositoryFromPath, repositoryPath } from "./catalog.js";
+import { cardsMarkup, standingsMarkup, castFaces, hook, boardMarkup, navigationMarkup, cohortMarkup, suggestionsMarkup, glyph } from "./view.js";
 import { icon, deckArtwork } from "./icons.js";
 import { chartsMarkup } from "./charts.js";
 import type { DailyPoint } from "./analytics.js";
 import type { LeaderboardRow } from "./catalog.js";
+import { setupMobileHeader } from "./mobile.js";
+import { topTenResult } from "./celebration.js";
 import { setupHelp } from "./help.js";
 import type { CardStandings } from "./neighbors.js";
 import type { StarHistory } from "./star-history.js";
@@ -17,8 +19,13 @@ function element<T extends HTMLElement>(id: string): T {
 }
 document.querySelectorAll<HTMLElement>("[data-icon]").forEach(node => node.replaceChildren(icon(node.dataset.icon ?? "arrow")));
 setupHelp();
+const showHeader = setupMobileHeader();
 const form = element<HTMLFormElement>("repo-form"), input = element<HTMLInputElement>("repo-input"), submit = element<HTMLButtonElement>("submit-button");
 const result = element("result"), loading = element("loading"), error = element("error");
+type BoardData = { category: string; rows: LeaderboardRow[]; cohort?: string; warming?: boolean; selected?: number; provisional?: boolean };
+const boardCache = new Map<string, BoardData>(), celebrated = new Set<string>();
+let homeRows: LeaderboardRow[] | null = null;
+const routeNotice = document.createElement("div"); routeNotice.className = "route-notice"; routeNotice.role = "alert"; routeNotice.hidden = true; document.body.append(routeNotice);
 const cache = new Map<string, Report>();
 const presentationCache = new Map<string, { history: DailyPoint[]; comparison: LeaderboardRow[]; stars?: StarHistory | null; neighbors?: CardStandings }>();
 let generation = 0;
@@ -57,7 +64,7 @@ function imageFallbacks(): void {
   document.querySelectorAll<HTMLImageElement>(".portrait img, #repo-avatar").forEach(image => image.addEventListener("error", () => { image.hidden = true; }));
 }
 function render(report: Report, presentation?: { history: DailyPoint[]; comparison: LeaderboardRow[]; stars?: StarHistory | null; neighbors?: CardStandings }): void {
-  document.documentElement.classList.add("has-report");
+  document.documentElement.classList.remove("has-board"); document.documentElement.classList.add("has-report"); element("board").hidden = true; showHeader();
   input.value = report.repository;
   element("result-title").textContent = report.repository;
   element("repo-description").textContent = report.description;
@@ -69,8 +76,8 @@ function render(report: Report, presentation?: { history: DailyPoint[]; comparis
   const owner = report.profile?.owner, avatar = element<HTMLImageElement>("repo-avatar");
   avatar.hidden = !owner;
   if (owner) { avatar.src = avatarPath(owner, 256); avatar.alt = `${report.repository.split("/")[0]} on GitHub`; }
-  const metadata = [report.profile?.stars !== null && report.profile?.stars !== undefined ? `${report.profile.stars.toLocaleString("en-US")} stars` : "", report.profile?.language ?? ""].filter(Boolean);
-  element("repo-meta").textContent = metadata.join(" · ");
+  const repoLabels = [report.profile?.stars !== null && report.profile?.stars !== undefined ? `${report.profile.stars.toLocaleString("en-US")} stars` : "", report.profile?.language ?? ""].filter(Boolean);
+  element("repo-meta").textContent = repoLabels.join(" · ");
   const c = report.coverage;
   element("scope-text").textContent = `90-DAY WINDOW · ${c.mergedObserved} OBSERVED MERGES · ${c.detailsRead} PR DIFFS INSPECTED`;
   element("read-time").textContent = `READ ${new Date(report.capturedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}`;
@@ -81,20 +88,17 @@ function render(report: Report, presentation?: { history: DailyPoint[]; comparis
   element("contribute-text").textContent = "Check the project's contribution guide before coding. The awards do not tell you whether outside PRs are welcome.";
   const link = element<HTMLAnchorElement>("contribute-link"); link.href = report.contributingUrl ?? `${report.url}#readme`;
   link.textContent = report.contributingUrl ? "Read the house rules" : "Check the project docs";
-  document.title = `${report.repository} — Repo Lore`;
-  const canonical = new URL(repositoryPath(report.repository), location.origin).href;
-  element<HTMLLinkElement>("canonical").href = canonical;
-  element<HTMLMetaElement>("og-title").content = document.title;
-  element<HTMLMetaElement>("og-description").content = hook(report);
-  element<HTMLMetaElement>("og-url").content = canonical;
-  element<HTMLMetaElement>("og-image").content = `${location.origin}/_og${repositoryPath(report.repository)}.png?v=${Date.parse(report.capturedAt)}`;
-  element<HTMLMetaElement>("twitter-image").content = element<HTMLMetaElement>("og-image").content;
-  result.hidden = false; imageFallbacks(); celebrate();
+  metadata(`${report.repository} — Repo Lore`, hook(report), repositoryPath(report.repository), `${location.origin}/_og${repositoryPath(report.repository)}.png?v=${Date.parse(report.capturedAt)}`);
+  result.hidden = false; imageFallbacks();
+  if (location.hash) requestAnimationFrame(() => {
+    const category = location.hash.slice("#award-".length);
+    if (location.hash.startsWith("#award-") && CATEGORIES[category]) document.getElementById(`award-${category}`)?.scrollIntoView({ block: "start", behavior: "instant" });
+  });
 }
 const loadingLines = ["Shuffling the repo lore…", "Polishing the tiny trophies…", "Looking for plot twists…", "Who brought the scissors?", "Sorting out the cast…"];
-async function load(raw: string, navigate = true): Promise<void> {
+async function load(raw: string, navigate = true, hash = "", submitted = false): Promise<void> {
   const run = ++generation;
-  error.hidden = true; result.hidden = true;
+  error.hidden = true; result.hidden = true; routeNotice.hidden = true; element("board").hidden = true; document.documentElement.classList.remove("has-board", "is-navigating");
   let repository: string;
   try { repository = parseRepository(raw); }
   catch (cause) { element("error-text").textContent = cause instanceof Error ? cause.message : "Enter a public GitHub repository."; error.hidden = false; return; }
@@ -115,8 +119,9 @@ async function load(raw: string, navigate = true): Promise<void> {
     if (run !== generation) return;
     if (report.repository.toLowerCase() !== expected.toLowerCase()) throw new Error("The result did not match this repository.");
     cache.set(repository.toLowerCase(), report); render(report, details);
-    if (navigate) history.pushState(null, "", repositoryPath(report.repository));
-    result.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block: "start" });
+    if (navigate) history.pushState(null, "", repositoryPath(report.repository) + hash);
+    reward(report, details?.neighbors, submitted);
+    if (!scrollToAward()) result.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block: "start" });
   } catch (cause) {
     if (run === generation) { element("error-text").textContent = cause instanceof Error ? cause.message : "This round could not be loaded."; error.hidden = false; }
   } finally {
@@ -124,26 +129,88 @@ async function load(raw: string, navigate = true): Promise<void> {
     if (run === generation) { loading.hidden = true; submit.disabled = false; input.disabled = false; }
   }
 }
-form.addEventListener("submit", event => { event.preventDefault(); void load(input.value); });
-document.querySelectorAll<HTMLButtonElement>(".repo-chip").forEach(button => button.addEventListener("click", () => { void load(button.dataset.repo ?? ""); }));
-window.addEventListener("popstate", () => {
-  const repo = repositoryFromPath(location.pathname);
-  if (repo) void load(repo, false);
-  else {
-    ++generation; result.hidden = true; loading.hidden = true; error.hidden = true;
-    document.documentElement.classList.remove("has-report"); element<HTMLDetailsElement>("repo-lookup").open = true;
-    document.title = "Repo Lore — your repo has lore";
-    element<HTMLLinkElement>("canonical").href = location.origin + "/";
-    element<HTMLMetaElement>("og-title").content = document.title;
-    element<HTMLMetaElement>("og-description").content = "The people, pull requests, and plot twists behind your favorite GitHub repo.";
-    element<HTMLMetaElement>("og-url").content = location.origin + "/";
-    element<HTMLMetaElement>("og-image").content = location.origin + "/_og/site.png";
-    element<HTMLMetaElement>("twitter-image").content = element<HTMLMetaElement>("og-image").content;
-  }
+function scrollToAward(): boolean {
+  const category = location.hash.slice("#award-".length);
+  if (!location.hash.startsWith("#award-") || !CATEGORIES[category]) return false;
+  document.getElementById(`award-${category}`)?.scrollIntoView({ block: "start", behavior: "instant" }); return true;
+}
+function reward(report: Report, standings?: CardStandings, submitted = false): void {
+  const key = report.repository.toLowerCase() + ":" + report.capturedAt;
+  if (submitted || (!celebrated.has(key) && topTenResult(standings))) celebrate();
+  celebrated.add(key);
+}
+function metadata(title: string, description: string, path: string, image: string): void {
+  document.title = title; element<HTMLLinkElement>("canonical").href = location.origin + path;
+  for (const [id, value] of Object.entries({ "og-title": title, "og-description": description, "og-url": location.origin + path, "og-image": image, "twitter-image": image })) element<HTMLMetaElement>(id).content = value;
+  document.querySelector<HTMLMetaElement>('meta[name="description"]')!.content = description;
+  const structured = document.querySelector<HTMLScriptElement>('script[type="application/ld+json"]');
+  if (structured) structured.textContent = JSON.stringify({ "@context": "https://schema.org", "@type": "WebPage", name: title, description, url: location.origin + path, image });
+}
+function renderBoard(data: BoardData): void {
+  const wasBoard = document.documentElement.classList.contains("has-board"), rail = element("board-navigation"), x = wasBoard ? rail.scrollLeft : 0;
+  document.documentElement.classList.remove("has-report"); document.documentElement.classList.add("has-board");
+  result.hidden = true; loading.hidden = true; error.hidden = true; element("board").hidden = false; element("board").dataset.category = data.category;
+  element("board-title").textContent = CATEGORIES[data.category].name; element("board-description").textContent = CATEGORIES[data.category].measure;
+  element("board-emblem").innerHTML = element("board-watermark").innerHTML = glyph(data.category);
+  rail.innerHTML = navigationMarkup(data.category, data.cohort); rail.scrollLeft = x;
+  element("cohort-controls").innerHTML = cohortMarkup(data); element("board-rows").innerHTML = boardMarkup(data.rows); imageFallbacks();
+  metadata(`${CATEGORIES[data.category].name} — Repo Lore`, CATEGORIES[data.category].measure, `/leaderboards/${data.category}`, `${location.origin}/_og/leaderboards/${data.category}.png?cohort=${data.cohort ?? "trending"}`);
+  if (!wasBoard) window.scrollTo({ top: 0, behavior: "instant" });
+  rail.querySelector<HTMLElement>('[aria-current="page"]')?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" }); showHeader();
+}
+async function loadBoard(url: URL, push = true): Promise<void> {
+  const category = url.pathname.slice(14), cohort = url.searchParams.get("cohort") === "top" ? "top" : "trending", key = `${category}:${cohort}`, run = ++generation;
+  routeNotice.hidden = true; document.documentElement.classList.add("is-navigating");
+  try {
+    let data = boardCache.get(key);
+    if (!data) {
+      const response = await fetch(`/api/leaderboards/${category}?cohort=${cohort}`, { signal: AbortSignal.timeout(15_000) });
+      if (!response.ok) throw new Error("This leaderboard could not load. Try again.");
+      data = await response.json() as BoardData;
+      if (data.category !== category || data.cohort !== cohort || !Array.isArray(data.rows)) throw new Error("This leaderboard could not load. Try again.");
+      boardCache.set(key, data);
+    }
+    if (run !== generation) return;
+    renderBoard(data); if (push) history.pushState(null, "", `/leaderboards/${category}${cohort === "top" ? "?cohort=top" : ""}`);
+  } catch { if (run === generation) { routeNotice.textContent = "This leaderboard could not load. Try again."; routeNotice.hidden = false; } }
+  finally { if (run === generation) { document.documentElement.classList.remove("is-navigating"); input.disabled = submit.disabled = false; } }
+}
+async function home(push = true): Promise<void> {
+  const run = ++generation; result.hidden = loading.hidden = error.hidden = element("board").hidden = true; input.disabled = submit.disabled = false;
+  routeNotice.hidden = true; document.documentElement.classList.remove("has-report", "has-board", "is-navigating"); element<HTMLDetailsElement>("repo-lookup").open = true;
+  metadata("Repo Lore — your repo has lore", "The people, pull requests, and plot twists behind your favorite GitHub repo.", "/", location.origin + "/_og/site.png");
+  if (push) history.pushState(null, "", "/"); window.scrollTo({ top: 0, behavior: "instant" }); showHeader();
+  if (!homeRows) try { const response = await fetch("/api/home", { signal: AbortSignal.timeout(10_000) }); if (response.ok) homeRows = (await response.json() as { suggestions: LeaderboardRow[] }).suggestions; } catch { /* Repo input remains available. */ }
+  if (run === generation) element("repo-suggestions").innerHTML = suggestionsMarkup(homeRows ?? []);
+}
+form.addEventListener("submit", event => { event.preventDefault(); void load(input.value, true, "", true); });
+document.addEventListener("click", event => {
+  if (!(event.target instanceof Element)) return;
+  const chip = event.target.closest<HTMLButtonElement>(".repo-chip");
+  if (chip) { void load(chip.dataset.repo ?? "", true, "", true); return; }
+  const link = event.target.closest<HTMLAnchorElement>("a[href]");
+  if (!link || link.target || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  const url = new URL(link.href); if (url.origin !== location.origin) return;
+  const repository = repositoryFromPath(url.pathname);
+  if (repository) { event.preventDefault(); void load(repository, true, url.hash); }
+  else if (url.pathname.startsWith("/leaderboards/") && CATEGORIES[url.pathname.slice(14)]) { event.preventDefault(); void loadBoard(url); }
+  else if (url.pathname === "/") { event.preventDefault(); void home(); }
 });
+window.addEventListener("popstate", () => {
+  const url = new URL(location.href), repository = repositoryFromPath(url.pathname);
+  if (repository) void load(repository, false, url.hash);
+  else if (url.pathname.startsWith("/leaderboards/") && CATEGORIES[url.pathname.slice(14)]) void loadBoard(url, false);
+  else void home(false);
+});
+try {
+  const initialHome = JSON.parse(document.getElementById("home-data")?.textContent ?? "null") as LeaderboardRow[] | null;
+  if (initialHome) homeRows = initialHome;
+  const initialBoard = JSON.parse(document.getElementById("board-data")?.textContent ?? "null") as BoardData | null;
+  if (initialBoard && CATEGORIES[initialBoard.category]) boardCache.set(`${initialBoard.category}:${initialBoard.cohort ?? "trending"}`, initialBoard);
+} catch { /* A route read can recover a damaged bootstrap. */ }
 const bootstrap = document.getElementById("repo-data")?.textContent;
 if (bootstrap && bootstrap !== "null") {
-  try { const data = JSON.parse(bootstrap) as { error?: string; presentation?: { history: DailyPoint[]; comparison: LeaderboardRow[]; stars?: StarHistory | null; neighbors?: CardStandings } }; if (typeof data.error === "string") { element("error-text").textContent = data.error; error.hidden = false; } else { const report = replayReport(data); if (data.presentation) presentationCache.set(report.repository.toLowerCase(), data.presentation); cache.set(report.repository.toLowerCase(), report); render(report, data.presentation); } }
+  try { const data = JSON.parse(bootstrap) as { error?: string; presentation?: { history: DailyPoint[]; comparison: LeaderboardRow[]; stars?: StarHistory | null; neighbors?: CardStandings } }; if (typeof data.error === "string") { element("error-text").textContent = data.error; error.hidden = false; } else { const report = replayReport(data); if (data.presentation) presentationCache.set(report.repository.toLowerCase(), data.presentation); cache.set(report.repository.toLowerCase(), report); render(report, data.presentation); reward(report, data.presentation?.neighbors); } }
   catch { element("error-text").textContent = "This snapshot could not be read. Enter the repo to try again."; error.hidden = false; }
 } else {
   const initial = repositoryFromPath(location.pathname) ?? new URL(location.href).searchParams.get("repo");
