@@ -13,7 +13,7 @@ bun install --frozen-lockfile
 bun run build
 bun run typecheck
 bun run test
-node --test test/release-guard.test.mjs
+node --test test/release-guard.test.mjs test/index-publication.test.mjs
 node scripts/release-guard.mjs --local
 bun run wrangler versions upload --dry-run
 ```
@@ -24,14 +24,12 @@ Never commit credentials, captured private data, or generated output.
 Ordinary contributions do not change hosting, Access, publication, or secrets.
 The npm package stays private.
 
-The intended release process requires the current GitHub Actions `check`, an
-up-to-date branch, one independent approval after the latest push, and resolved
-conversations. Justin temporarily deferred required reviews until CI/CD ships;
-[DEPLOYMENT.md](DEPLOYMENT.md) gives the activation order. Once enabled, new
-commits dismiss approvals. These rules apply to admins; force pushes and
-deletion are disabled. Maintainers squash merge. There are multiple writers;
-the PR author cannot self-approve. If only one writer remains, add a trusted
-reviewer rather than bypassing checks or pretending self-review is independent.
+The enforced process requires the current GitHub Actions `check`, an up-to-date
+branch, and resolved conversations. Admin enforcement, linear history, and
+blocked force pushes/deletion remain active. Maintainers squash merge.
+As verified on October 7, 2026, required approvals are set to zero under Justin's
+waiver. An independent review is useful, but it is not currently an enforced gate.
+Do not change branch protection without a separate user instruction.
 
 Fork PRs run with read-only permissions and no production credentials. A
 maintainer must approve runs from external contributors after inspecting the

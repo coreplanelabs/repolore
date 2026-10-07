@@ -183,14 +183,10 @@ weeks, keeps the last 30 dates before the current UTC date, and preserves missin
 dates as missing. GitHub calendar boundaries may differ from UTC. These are
 **stars added**, not net growth after unstars or historical total-star balances.
 
-For the saved public comparison set, an explicit maintainer backfill uses `gh`
-without saving its credential:
-
-```sh
-bun run build
-node scripts/backfill-stars.mjs --popular
-wrangler kv bulk put .data/star-seed.json --binding REPORTS --remote
-```
+The daily index script captures this history for the full comparison pool.
+Use the Daily comparisons commands above for capture and publication. The old
+curated star-seed command writes legacy keys and does not update an active,
+versioned dataset.
 
 Hover or keyboard focus opens positioned explanations on desktop. Phones and
 touch devices use a tap-open modal with a close button and Escape support.
@@ -226,7 +222,13 @@ zoom where supported by the browser. Safe-area padding protects header/footer
 controls. Only award artwork and the brand logo rotate on hover.
 
 The nine-card homepage grid uses the #1 result from each Trending award board and links
-to that board. Repo suggestions use custom repository artwork when GitHub has
-one, organization logos otherwise, and a project monogram for personal repos
-without artwork. Contributor faces stay on the contributor results. Artwork is
+to that board. Small repo icons use organization logos first, custom repository artwork when
+available for personal repos, and a project monogram otherwise. Contributor faces stay on the contributor results. Artwork is
 proxied from validated GitHub image hosts; no credential is sent to image hosts.
+
+## Project boundary
+
+Repo Lore remains this nine-award product. The focused human/AI-agent experiment
+is a separate project seeded from commit `bfaf242`. Its classifier and deployment
+resources do not belong here. See [PROJECT_STATUS.md](PROJECT_STATUS.md) for the
+handoff and verified delivery records.
