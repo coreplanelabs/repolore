@@ -91,3 +91,18 @@ Six weeks supply up to 30 dated addition counts before today's UTC date. GitHub
 week/day boundaries are provider-defined and need not align with UTC; missing
 dates are not filled. Additions do not subtract unstars and cannot reconstruct
 old net balances. Daily metadata readings remain the source for net changes.
+
+## Bot Party and nearby repos
+
+Bot Party counts observed merges whose PR author has GitHub's Bot account type.
+Its percentage divides that count by all observed merges. Missing authors are
+not treated as bots or humans. A repo with observed merges and no known bots can
+have a zero score; no observed merges produces an empty award. The leaderboard
+compares bot-authored merge counts, not commits or developer AI use.
+
+Card neighbors use the same typed winning values and ordering as the index's
+leaderboards, with the current repo added only for comparison. Higher counts
+lead; Fastest Lap sorts lower elapsed time first. Equal scores share rank, with
+repository names breaking display-order ties. Adjacent equal scores say Level
+with, not Just ahead or Just behind. Unknown or empty awards have no invented
+rank. These comparisons retain each snapshot's original scope.

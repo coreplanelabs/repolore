@@ -20,9 +20,9 @@ test('star backfill uses daily additions, excludes today, and never turns missin
   assert.equal(starMetric(parseStarHistory([], now)), null);
   assert.throws(() => parseStarHistory([{ week, total: 3, days: [1, 1, -1, 1, 1, 0, 0] }], now));
 });
-test('six award surfaces and accents are distinct', () => {
-  assert.equal(new Set(Object.values(AWARD_PALETTE).map(row => row.surface)).size, 6);
-  assert.equal(new Set(Object.values(AWARD_PALETTE).map(row => row.accent)).size, 6);
+test('seven award surfaces and accents are distinct', () => {
+  assert.equal(new Set(Object.values(AWARD_PALETTE).map(row => row.surface)).size, 7);
+  assert.equal(new Set(Object.values(AWARD_PALETTE).map(row => row.accent)).size, 7);
 });
 test('cast standings represent the repo team with a facepile and no organization as winning author', () => {
   const html = boardMarkup([{ repository: 'team/repo', person: null, cast: [{ id: 1, login: 'one', bot: false }, { id: 2, login: 'two', bot: false }], castCount: 5, repoOwner: { id: 99, login: 'organization', bot: false }, score: 5, value: '5 contributor accounts', source: 'https://github.com/team/repo', capturedAt: '2026-10-06T12:00:00Z', sampled: true, inspected: 10, stars: 100, starAdded: 20, starDays: 30 }]);

@@ -3,11 +3,21 @@ import { icon } from "./icons.js";
 export function setupHelp(): void {
   const hover = window.matchMedia("(hover: hover) and (pointer: fine)");
   const bubble = document.createElement("div"); bubble.className = "help-bubble"; bubble.id = "help-bubble"; bubble.role = "tooltip"; bubble.hidden = true;
-  const heading = document.createElement("strong"), text = document.createElement("p"); bubble.append(heading, text); document.body.append(bubble);
+  const heading = document.createElement("strong"), text = document.createElement("div"); bubble.append(heading, text); document.body.append(bubble);
   const sheet = document.createElement("dialog"); sheet.className = "help-sheet"; sheet.setAttribute("aria-labelledby", "help-heading");
-  const panel = document.createElement("div"), sheetHeading = document.createElement("h2"), sheetText = document.createElement("p"), close = document.createElement("button");
+  const panel = document.createElement("div"), sheetHeading = document.createElement("h2"), sheetText = document.createElement("div"), close = document.createElement("button");
   sheetHeading.id = "help-heading"; close.type = "button"; close.className = "help-close"; close.setAttribute("aria-label", "Close explanation"); close.append(icon("close")); panel.append(close, sheetHeading, sheetText); sheet.append(panel); document.body.append(sheet);
   const canHover = () => hover.matches && window.innerWidth > 700;
+  text.className = sheetText.className = "help-copy";
+  function copy(target: HTMLElement, value: string): void {
+    target.replaceChildren(...value.split("\n").filter(Boolean).map(line => {
+      const p = document.createElement("p"), colon = line.indexOf(":");
+      if (colon > 0 && ["Trending", "Top stars", "Read", "PRs inspected", "Coverage", "Stars added", "Ranks", "Ties"].includes(line.slice(0, colon))) {
+        const label = document.createElement("strong"); label.textContent = line.slice(0, colon + 1); p.append(label, document.createTextNode(line.slice(colon + 1)));
+      } else p.textContent = line;
+      return p;
+    }));
+  }
   let active: HTMLElement | null = null, returnFocus: HTMLElement | null = null;
   function hide(): void { bubble.hidden = true; active?.removeAttribute("aria-describedby"); active = null; }
   function place(): void {
@@ -18,7 +28,7 @@ export function setupHelp(): void {
   }
   function show(target: HTMLElement): void {
     if (!canHover() || sheet.open) return;
-    hide(); active = target; heading.textContent = target.dataset.helpTitle ?? "Behind the number"; text.textContent = target.dataset.help ?? "";
+    hide(); active = target; heading.textContent = target.dataset.helpTitle ?? "Behind the number"; copy(text, target.dataset.help ?? "");
     bubble.hidden = false; active.setAttribute("aria-describedby", bubble.id); place();
   }
   const targetOf = (event: Event): HTMLElement | null => event.target instanceof Element ? event.target.closest<HTMLElement>("[data-help]") : null;
@@ -28,7 +38,7 @@ export function setupHelp(): void {
   document.addEventListener("focusout", hide);
   document.addEventListener("click", event => {
     const target = targetOf(event); if (!target || canHover()) return;
-    event.preventDefault(); hide(); returnFocus = target; sheetHeading.textContent = target.dataset.helpTitle ?? "Behind the number"; sheetText.textContent = target.dataset.help ?? ""; sheet.showModal();
+    event.preventDefault(); hide(); returnFocus = target; sheetHeading.textContent = target.dataset.helpTitle ?? "Behind the number"; copy(sheetText, target.dataset.help ?? ""); sheet.showModal();
   });
   close.addEventListener("click", () => sheet.close());
   sheet.addEventListener("click", event => { if (event.target === sheet) sheet.close(); });

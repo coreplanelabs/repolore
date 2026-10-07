@@ -87,8 +87,26 @@ test("repeated previews rasterize once and keep the same source snapshot", async
 });
 test("every leaderboard's declared OG path returns a PNG", async () => {
   const { options } = setup(), handler = createHandler(options);
-  for (const category of ["merge", "delete", "comments", "cast", "oldest", "fast"]) {
+  for (const category of ["merge", "delete", "comments", "cast", "oldest", "fast", "bots"]) {
     const response = await handler(new Request(`https://repolore.fun/_og/leaderboards/${category}.png`));
     assert.equal(response.status, 200, category); assert.equal(response.headers.get("Content-Type"), "image/png");
   }
+});
+import { parsePull } from "../src/core.js";
+test("SPA leaderboard API and home suggestions use saved Trending facts, with suggestions ranked by Merge Machine", async () => {
+  const { data, options, calls } = setup();
+  const examples = [ ['large/repo', 9, 0], ['first/repo', 5, 4], ['second/repo', 3, 8], ['third/repo', 4, 2] ] as const;
+  data.set('index:catalog', JSON.stringify({ selected: examples.map(row => row[0]), discoveredAt: new Date(NOW).toISOString(), cursor: 0 }));
+  for (const [repository, merges, added] of examples) {
+    const closed = Array.from({ length: merges }, (_, i) => parsePull({ number: i + 1, title: 'Change', user: { id: 1, login: 'author', type: 'User' }, created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-05T00:00:00Z', merged_at: '2026-10-05T00:00:00Z', draft: false, head: { sha: 'a'.repeat(40) } }, repository));
+    const report = buildReport({ repository, description: '', now: NOW, closed, details: [], open: [], notes: [], requests: 0, contributingUrl: null, periodComplete: true, openKnown: true, detailRequested: 0 });
+    data.set(`repo:${repository}`, JSON.stringify(report));
+    data.set(`stars:${repository}`, JSON.stringify({ capturedAt: new Date(NOW).toISOString(), days: [{ day: '2026-10-05', added }] }));
+  }
+  const handler = createHandler(options);
+  const home = await (await handler(new Request('https://repolore.fun/api/home'))).json() as { suggestions: { repository: string }[] };
+  assert.deepEqual(home.suggestions.map(row => row.repository), ['first/repo', 'third/repo', 'second/repo']);
+  const board = await (await handler(new Request('https://repolore.fun/api/leaderboards/merge'))).json() as { category: string; cohort: string; rows: { repository: string }[] };
+  assert.equal(board.category, 'merge'); assert.equal(board.cohort, 'trending'); assert.equal(board.rows.length, 3);
+  assert.deepEqual(calls, []);
 });

@@ -3,6 +3,7 @@ import { CATEGORIES, leaderboard, repositoryFromPath, repositoryPath } from "../
 import { cohortReports, readCatalog, readHistory, recordIndexed } from "./indexing.js";
 import { captureStars, readStars } from "./stars.js";
 import { starMetric } from "../src/star-history.js";
+import { cardStandings } from "../src/neighbors.js";
 import { relativeRows } from "../src/analytics.js";
 import { pageHtml, safeJson } from "./html.js";
 import { boardCard, ogSvg, reportCard, siteCard, type OgCard } from "./og.js";
@@ -70,9 +71,14 @@ export function createHandler(options: ServerOptions): (request: Request) => Pro
       const metric = starMetric(await readStars(options.store, row.repository)); return { ...row, starAdded: metric?.added, starDays: metric?.days };
     }));
   }
+  async function homeSuggestions() { return leaderboard((await cohortReports(options.store, "trending")).reports, "merge").slice(0, 3); }
+  async function boardData(category: string, cohort: string) {
+    const data = await cohortReports(options.store, cohort);
+    return { category, rows: await boardRows(data.reports, category), cohort, warming: data.warming, selected: data.selected, provisional: data.provisional };
+  }
   async function presentation(report: Report) {
-    const history = await readHistory(options.store, report.repository), comparison = relativeRows(report, await reports(), "comments");
-    return { history, comparison, stars: await readStars(options.store, report.repository) };
+    const baseline = await reports(), history = await readHistory(options.store, report.repository), comparison = relativeRows(report, baseline, "comments");
+    return { history, comparison, neighbors: cardStandings(report, baseline), stars: await readStars(options.store, report.repository) };
   }
   async function avatar(id: string, size: number): Promise<{ bytes: Uint8Array; type: string } | null> {
     const result = await options.fetch(`https://avatars.githubusercontent.com${id}?s=${size}&v=4`, { redirect: "error", signal: deadline(5000), headers: { Accept: "image/png,image/jpeg" } });
@@ -127,15 +133,16 @@ export function createHandler(options: ServerOptions): (request: Request) => Pro
         const raw = path.slice(9), id = "/" + raw, size = Number(url.searchParams.get("size") ?? 160);
         if (!/^(u|in)\/[1-9]\d{0,14}$/.test(raw) || ![64, 160, 256].includes(size)) return response("Not found", 404, "text/plain");
         const image = await avatar(id, size); result = image ? response(image.bytes.slice().buffer, 200, image.type, { "Cache-Control": "private, max-age=86400" }) : response("Photo unavailable", 404, "text/plain");
-      } else if (path.startsWith("/api/repos/")) {
+      } else if (path === "/api/home") result = json({ suggestions: await homeSuggestions() });
+      else if (path.startsWith("/api/leaderboards/") && CATEGORIES[path.slice(18)]) result = json(await boardData(path.slice(18), url.searchParams.get("cohort") === "top" ? "top" : "trending"));
+      else if (path.startsWith("/api/repos/")) {
         const repository = repositoryFromPath(path.slice(10));
         if (!repository) return json({ error: "Use owner/repo." }, 400);
         const report = await getReport(repository); result = json({ ...report, presentation: await presentation(report) });
       } else if (path === "/leaderboards") return response(null, 301, "text/plain", { Location: "/leaderboards/comments" });
       else if (path.startsWith("/leaderboards/") && CATEGORIES[path.slice(14)]) {
         const category = path.slice(14), cohort = url.searchParams.get("cohort") === "top" ? "top" : "trending";
-        const data = await cohortReports(options.store, cohort), rows = await boardRows(data.reports, category);
-        result = response(pageHtml(await shell(), url.origin, undefined, { category, rows, cohort, warming: data.warming, selected: data.selected, provisional: data.provisional }));
+        result = response(pageHtml(await shell(), url.origin, undefined, await boardData(category, cohort)));
       } else if (path.startsWith("/_og/") && path.endsWith(".png")) {
         let card: OgCard;
         if (path === "/_og/site.png") card = siteCard();
@@ -154,7 +161,7 @@ export function createHandler(options: ServerOptions): (request: Request) => Pro
           const report = await getReport(repository), canonical = repositoryPath(report.repository);
           if (path !== canonical || url.search) return response(null, 301, "text/plain", { Location: canonical });
           result = response(pageHtml(await shell(), url.origin, report, undefined, await presentation(report)));
-        } else if (path === "/" || path === "/index.html") result = response(pageHtml(await shell(), url.origin));
+        } else if (path === "/" || path === "/index.html") result = response(pageHtml(await shell(), url.origin, undefined, undefined, undefined, await homeSuggestions()));
         else result = await options.assets.fetch(request);
       }
     } catch (cause) {

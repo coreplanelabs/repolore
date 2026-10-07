@@ -1,6 +1,6 @@
 import type { Report } from "../src/core.js";
 import { avatarPath, CATEGORIES, repositoryPath, type LeaderboardRow } from "../src/catalog.js";
-import { boardMarkup, cardsMarkup, escapeHtml, hook, navigationMarkup, standingsMarkup, castFaces, glyph, helpButton } from "../src/view.js";
+import { boardMarkup, cardsMarkup, escapeHtml, hook, navigationMarkup, standingsMarkup, castFaces, glyph, helpButton, cohortMarkup, suggestionsMarkup } from "../src/view.js";
 export function safeJson(value: unknown): string { return JSON.stringify(value).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029"); }
 function content(html: string, id: string, value: string): string {
   const pattern = new RegExp(`(<(?:div|p|h[1-6]|section)[^>]*id="${id}"[^>]*>)([\\s\\S]*?)(<\\/(?:div|p|h[1-6]|section)>)`);
@@ -8,9 +8,10 @@ function content(html: string, id: string, value: string): string {
 }
 function meta(html: string, id: string, value: string): string { return html.replace(new RegExp(`(<meta id="${id}"[^>]*content=")[^"]*(")`), (_, start: string, end: string) => start + escapeHtml(value) + end); }
 import { chartsMarkup } from "../src/charts.js";
+import type { CardStandings } from "../src/neighbors.js";
 import type { StarHistory } from "../src/star-history.js";
 import type { DailyPoint } from "../src/analytics.js";
-export function pageHtml(template: string, origin: string, report?: Report, board?: { category: string; rows: LeaderboardRow[]; cohort?: string; warming?: boolean; selected?: number; provisional?: boolean }, presentation?: { history: DailyPoint[]; comparison: LeaderboardRow[]; stars?: StarHistory | null }): string {
+export function pageHtml(template: string, origin: string, report?: Report, board?: { category: string; rows: LeaderboardRow[]; cohort?: string; warming?: boolean; selected?: number; provisional?: boolean }, presentation?: { history: DailyPoint[]; comparison: LeaderboardRow[]; stars?: StarHistory | null; neighbors?: CardStandings }, suggestions?: LeaderboardRow[]): string {
   const title = report ? `${report.repository} — Repo Lore` : board ? `${CATEGORIES[board.category].name} — Repo Lore` : "Repo Lore — your repo has lore";
   const path = report ? repositoryPath(report.repository) : board ? `/leaderboards/${board.category}` : "/";
   const description = report ? hook(report) : board ? CATEGORIES[board.category].measure : "The people, pull requests, and plot twists behind your favorite GitHub repo.";
@@ -24,7 +25,7 @@ export function pageHtml(template: string, origin: string, report?: Report, boar
     html = content(html, "result-title", escapeHtml(report.repository)); html = content(html, "repo-description", escapeHtml(report.description));
     html = content(html, "repo-hook", escapeHtml(description)); html = content(html, "header-cast", castFaces(report));
     html = content(html, "insights", chartsMarkup(report, presentation?.history, presentation?.comparison, presentation?.stars));
-    html = content(html, "awards", cardsMarkup(report)); html = content(html, "standings", standingsMarkup(report));
+    html = content(html, "awards", cardsMarkup(report, presentation?.neighbors)); html = content(html, "standings", standingsMarkup(report));
     html = html.replace('<script id="repo-data" type="application/json">null</script>', `<script id="repo-data" type="application/json">${safeJson({ ...report, presentation })}</script>`);
     if (report.profile?.owner) html = html.replace('<img id="repo-avatar" alt="" width="96" height="96" hidden>', `<img id="repo-avatar" src="${avatarPath(report.profile.owner, 256)}" alt="${escapeHtml(report.repository.split("/")[0])}" width="96" height="96">`);
     html = content(html, "repo-meta", escapeHtml([report.profile?.stars !== null && report.profile?.stars !== undefined ? `${report.profile.stars.toLocaleString("en-US")} stars` : "", report.profile?.language ?? ""].filter(Boolean).join(" · ")));
@@ -40,12 +41,14 @@ export function pageHtml(template: string, origin: string, report?: Report, boar
     html = content(html, "board-title", escapeHtml(CATEGORIES[board.category].name)); html = content(html, "board-description", escapeHtml(description));
     html = html.replace('<nav id="board-navigation" class="board-navigation" aria-label="Award leaderboards"></nav>', `<nav id="board-navigation" class="board-navigation" aria-label="Award leaderboards">${navigationMarkup(board.category, board.cohort)}</nav>`);
     html = content(html, "board-rows", boardMarkup(board.rows));
-    const cohort = board.cohort ?? "trending";
-    const topTip = board.provisional ? "The current curated baseline, ordered by award results. A stars-based top-100 shortlist starts when scheduled indexing is enabled." : "Public, non-fork, non-archived repos with the most GitHub stars. The shortlist is refreshed daily.";
-    const trendTip = "The 20 indexed repos with the most stars added in GitHub's daily history over the last 30 days. Award results rank that group.";
-    const state = board.warming ? "\nStar history is still loading; these results use the current saved repos." : "";
-    html = content(html, "cohort-controls", `<span class="cohort-label">EXPLORE</span><div class="cohort-switch"><a href="/leaderboards/${board.category}"${cohort === "trending" ? ' aria-current="page"' : ""}>${glyph("trend")}<span>Trending</span></a><a href="/leaderboards/${board.category}?cohort=top"${cohort === "top" ? ' aria-current="page"' : ""}>${glyph("star")}<span>Top stars</span></a></div>${helpButton("Trending: " + trendTip + "\n\nTop stars: " + topTip + state, "How repo pools are chosen", "Choose your league")}`);
+    html = content(html, "cohort-controls", cohortMarkup(board));
+    html = html.replace('<script id="board-data" type="application/json">null</script>', `<script id="board-data" type="application/json">${safeJson(board)}</script>`);
 
+
+  }
+  if (suggestions) {
+    html = content(html, "repo-suggestions", suggestionsMarkup(suggestions));
+    html = html.replace('<script id="home-data" type="application/json">null</script>', `<script id="home-data" type="application/json">${safeJson(suggestions)}</script>`);
   }
   const structured = { "@context": "https://schema.org", "@type": "WebPage", name: title, description, url: origin + path, image };
   return html.replace('</head>', `<script type="application/ld+json">${safeJson(structured)}</script></head>`);
