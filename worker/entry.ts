@@ -2,6 +2,7 @@ import wasm from "@resvg/resvg-wasm/index_bg.wasm";
 import { createHandler, type Store } from "../server/http.js";
 import { pngRenderer } from "../server/og.js";
 import { edgeFetcher } from "../server/transport.js";
+import { refreshIndex } from "../server/indexing.js";
 interface Env { ASSETS: { fetch(request: Request): Promise<Response> }; REPORTS: Store; GITHUB_TOKEN?: string }
 let handler: ReturnType<typeof createHandler> | undefined;
 export default {
@@ -13,5 +14,10 @@ export default {
         return new Uint8Array(await response.arrayBuffer());
       }))) });
     return handler(request);
+  },
+  scheduled(_event: unknown, env: Env, ctx: { waitUntil(promise: Promise<unknown>): void }): void {
+    ctx.waitUntil(refreshIndex({ store: env.REPORTS, fetch: edgeFetcher((input, init) => fetch(input, init)), now: Date.now, token: env.GITHUB_TOKEN }).then(result => {
+      console.log("RepoLore index", { status: result.status, captured: result.captured });
+    }).catch(() => { console.warn("RepoLore index refresh unavailable; preserving existing snapshots."); }));
   }
 };

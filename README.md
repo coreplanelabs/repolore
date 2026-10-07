@@ -1,4 +1,4 @@
-# Repo Lore
+# <img src="public/favicon.svg" alt="" width="40" height="40"> Repo Lore
 
 The merge machines, delete legends, and main characters behind a GitHub repo.
 
@@ -74,10 +74,12 @@ merges. At most 14 GitHub requests run with two diff reads at a time. A 24-secon
 deadline and eight-million-character response cap bound the scan. Private repos
 are rejected even when a server credential is configured.
 
-The Worker keeps the latest public snapshot in KV and reuses it for one hour.
+Indexed repos reuse their saved snapshot; the scheduler refreshes the index.
+An on-demand repo uses a 15-minute temporary cache and is not added to the index.
 If GitHub is temporarily unavailable or rate-limited, an existing snapshot can
 still be shown with its original date and a note. An unknown repo without a
-snapshot gets a plain error. Versioned OG snapshots expire after seven days;
+snapshot gets a plain error. Indexed versioned OG snapshots expire after seven days; temporary ones after
+fifteen minutes;
 an expired version never silently uses different facts.
 
 Anonymous GitHub quota is limited by source IP. A public-read GitHub credential
@@ -98,9 +100,23 @@ bun run seed
 wrangler kv bulk put .data/seed.json --binding REPORTS --remote
 ```
 
-The popular list is in `src/catalog.ts`. A single repo can be captured with
-`bun run capture owner/repo`. A leaderboard reads the saved comparisons; viewing
-it does not start scans of every repo. Refresh captures when updating that set.
+The starting baseline is in `src/catalog.ts`. A single repo can be captured with
+`bun run capture owner/repo`. Leaderboard views read saved comparisons.
+
+With a dedicated `GITHUB_TOKEN`, a fifteen-minute Worker cron refreshes up to
+four repos per run. Each day it discovers up to 100 public, non-fork, non-archived
+repos with the most stars. A full 100-repo pass takes about 6.25 hours. It retains
+up to 90 daily readings; same-day captures replace that day rather than creating
+fake history. Trending selects up to 20 indexed repos by positive net star growth
+over up to seven days. Top stars uses the discovered shortlist. Both groups rank
+the selected award, not stars. Until discovery and a second daily reading exist,
+the UI names the curated baseline and warming state. Without a token the cron
+does no GitHub reads. An arbitrary queried repo is compared against the index,
+but is not permanently added to it.
+
+Repo graphs show human/bot merge shares, sampled daily merge activity, actual
+star readings, and the repo's Comment Magnet comparison. Unknown accounts stay
+separate. Missing days and history are not fabricated.
 
 ## For terminal users and agents
 
@@ -130,7 +146,7 @@ real PNG checks are separate. [RESEARCH.md](RESEARCH.md) records design referenc
 
 Light, Dark, and System themes use local fonts. The green values are CSS tokens:
 light `#29E047`, dark `#3FF35D`. Motion respects reduced-motion preferences.
-Polylane pays for the servers; the app uses its name as a footer credit.
+The footer credits Polylane: built for fun.
 
 ## License
 
