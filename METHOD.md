@@ -79,9 +79,15 @@ in the captured listing, not a claim to all merges that day. Stars are metadata
 readings recorded on capture, with at most one point per UTC day for 90 days.
 
 Top stars discovers up to 100 public, non-fork, non-archived repos by star count
-each day. Trending selects up to 20 of those with positive net growth over up
-to seven days, requiring at least two daily readings. Award rows rank each
+each day. Trending selects up to 20 of those by positive star additions across the
+last 30 days of GitHub's aggregate history. Award rows rank each
 cohort by its observed award value. The starting curated baseline is shown
-and labeled until discovery or growth history is available. No LLM judgment
+and labeled until discovery or aggregate history is available. No LLM judgment
 selects either group. Arbitrary lookups enter the comparison only for that
 result; they do not change the indexed cohort.
+
+Star backfills use GitHub's aggregate star history, not stargazer identities.
+Six weeks supply up to 30 dated addition counts before today's UTC date. GitHub
+week/day boundaries are provider-defined and need not align with UTC; missing
+dates are not filled. Additions do not subtract unstars and cannot reconstruct
+old net balances. Daily metadata readings remain the source for net changes.
