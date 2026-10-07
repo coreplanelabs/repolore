@@ -4,16 +4,18 @@ import { appendPoint, dailyPoint, type DailyPoint } from "../src/analytics.js";
 import { captureStars, readStars } from "./stars.js";
 import { starMetric } from "../src/star-history.js";
 import type { Store } from "./http.js";
-export type Catalog = { selected: string[]; discoveredAt: string | null; cursor: number; lastRefresh?: string; status?: string };
+export type Catalog = { selected: string[]; discoveredAt: string | null; cursor: number; lastRefresh?: string; status?: string; datasetId?: string; indexed?: number };
 export async function readCatalog(store: Store): Promise<Catalog> {
   try { const value = JSON.parse(await store.get("index:catalog") ?? "null") as Catalog | null;
-    if (value && Array.isArray(value.selected) && value.selected.length > 0 && value.selected.length <= 100) return { ...value, selected: value.selected.map(parseRepository), cursor: Number.isSafeInteger(value.cursor) && value.cursor >= 0 ? value.cursor : 0 };
+    if (value && Array.isArray(value.selected) && value.selected.length > 0 && value.selected.length <= 1000) return { ...value, selected: value.selected.map(parseRepository), cursor: Number.isSafeInteger(value.cursor) && value.cursor >= 0 ? value.cursor : 0 };
   } catch { /* Existing snapshots remain useful during initial indexing. */ }
   return { selected: POPULAR_REPOS, discoveredAt: null, cursor: 0 };
 }
 export async function readHistory(store: Store, repository: string): Promise<DailyPoint[]> {
   try {
-    const raw = await store.get(`history:${repository.toLowerCase()}`);
+    const catalog = await readCatalog(store);
+    const key = catalog.datasetId && catalog.selected.some(name => name.toLowerCase() === repository.toLowerCase()) ? `dataset:${catalog.datasetId}:history:${repository.toLowerCase()}` : `history:${repository.toLowerCase()}`;
+    const raw = await store.get(key);
     if (!raw) { const saved = await store.get(`repo:${repository.toLowerCase()}`); return saved ? [dailyPoint(replayReport(JSON.parse(saved)))] : []; }
     const rows = JSON.parse(raw) as DailyPoint[];
     if (!Array.isArray(rows)) return [];
@@ -42,6 +44,7 @@ export async function cohortReports(store: Store, cohort = "trending"): Promise<
   return { reports: trending.length ? trending.map(row => row.report) : found, warming: trending.length === 0, selected: catalog.selected.length, provisional: !catalog.discoveredAt };
 }
 export async function refreshIndex(options: { store: Store; fetch: typeof fetch; now: () => number; token?: string; deadline?: (ms: number) => AbortSignal }): Promise<{ status: string; captured: number }> {
+  if ((await readCatalog(options.store)).datasetId) return { status: "managed-by-daily-job", captured: 0 };
   if (!options.token) return { status: "needs-public-read-credential", captured: 0 };
   const deadline = options.deadline ?? ((ms: number) => AbortSignal.timeout(ms)), now = options.now(), catalog = await readCatalog(options.store);
   if (!catalog.discoveredAt || now - Date.parse(catalog.discoveredAt) >= 86_400_000) {

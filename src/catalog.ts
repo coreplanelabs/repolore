@@ -4,10 +4,12 @@ export const POPULAR_REPOS = ["vitejs/vite", "oven-sh/bun", "vercel/next.js", "r
 export const CATEGORIES: Record<string, { name: string; measure: string }> = {
   merge: { name: "Merge Machine", measure: "Most authored merges in each observed snapshot" },
   delete: { name: "Delete Club", measure: "Largest single-PR deletion among inspected merges" },
-  comments: { name: "Comment Magnet", measure: "Most inline review comments on one inspected PR" },
+  comments: { name: "Comment Magnet", measure: "Most discussion comments on one inspected merged PR" },
   cast: { name: "The Cast", measure: "Most distinct authors in each observed merge snapshot" },
   oldest: { name: "The Long Goodbye", measure: "Oldest open PR by calendar age" },
   fast: { name: "Fastest Lap", measure: "Shortest observed opening-to-merge interval" },
+  additions: {name:"Big Bang",measure:"Most lines added in one inspected merged PR"},
+  humans: {name:"Human Touch",measure:"Most observed merges from GitHub user accounts"},
   bots: { name: "Bot Party", measure: "Most observed merged PRs authored by GitHub bot accounts" }
 };
 export type Contributor = { author: Author; merges: number; share: number };
@@ -50,24 +52,25 @@ export function hook(report: Report): string {
   return [lead ? `@${lead.author.login} authored ${lead.merges} of ${report.coverage.mergedObserved} observed merges.` : "Every repo has a cast. This one's next chapter is still unwritten.",
     oldest?.status === "observed" ? `${oldest.headline} is still part of the plot: ${oldest.value}.` : ""].filter(Boolean).join(" ");
 }
-export type LeaderboardRow = { repository: string; person: Author | null; score: number; value: string; source: string; capturedAt: string; sampled: boolean; inspected: number; repoOwner?: Author | null; stars?: number | null; language?: string | null; cast?: Author[]; castCount?: number; starAdded?: number; starDays?: number; crewLabel?: string };
+export type LeaderboardRow = { repository: string; person: Author | null; score: number; value: string; source: string; capturedAt: string; sampled: boolean; inspected: number; repoOwner?: Author | null; repoImageUrl?: string; repoOrganization?: boolean; stars?: number | null; language?: string | null; cast?: Author[]; castCount?: number; starAdded?: number; starDays?: number; headline?:string; crewLabel?: string };
 export function leaderboard(reports: Report[], category: string): LeaderboardRow[] {
   if (!CATEGORIES[category]) return [];
   const rows: LeaderboardRow[] = [];
   for (const report of reports) {
     const award = report.awards.find(award => award.id === category);
-    if (!award || award.status !== "observed") continue;
+    if (!award || award.status !== "observed" || (category === "comments" && reports.some(row => row.version === 2) && report.version !== 2)) continue;
     const pr = [...report.facts.details, ...report.facts.open, ...report.facts.closed].find(pr => pr.number === award.evidence[0]?.number);
     const detail = report.facts.details.find(pr => pr.number === award.evidence[0]?.number);
     const score = category === "merge" ? contributors(report)[0]?.merges : category === "delete" ? detail?.deletions :
-      category === "comments" ? detail?.reviewComments : category === "cast" ? contributors(report).length :
+      category === "additions" ? detail?.additions : category === "humans" ? contributors(report).filter(row=>!row.author.bot).reduce((sum,row)=>sum+row.merges,0) :
+      category === "comments" ? (report.version === 2 ? detail?.totalComments : detail?.reviewComments) : category === "cast" ? contributors(report).length :
       category === "bots" ? contributors(report).filter(row => row.author.bot).reduce((sum, row) => sum + row.merges, 0) :
       category === "oldest" && pr ? Math.floor((Date.parse(report.capturedAt) - pr.createdAt) / 86_400_000) :
       category === "fast" && pr && pr.mergedAt !== null ? pr.mergedAt - pr.createdAt : undefined;
-    if (score === undefined || !Number.isFinite(score)) continue;
-    rows.push({ repository: report.repository, person: ["cast", "bots"].includes(category) ? null : awardPerson(report, category), score,
-      value: award.value, source: award.evidence[0]?.url ?? report.url, capturedAt: report.capturedAt,
-      sampled: !report.coverage.periodComplete, inspected: report.coverage.detailsRead, cast: ["cast", "bots"].includes(category) ? contributors(report).filter(row => category !== "bots" || row.author.bot).slice(0, 3).map(row => row.author) : undefined, castCount: ["cast", "bots"].includes(category) ? contributors(report).filter(row => category !== "bots" || row.author.bot).length : undefined, crewLabel: category === "bots" ? "Bot accounts" : "Contributors", repoOwner: report.profile?.owner ?? null, stars: report.profile?.stars ?? null, language: report.profile?.language ?? null });
+    if (score === undefined || score === null || !Number.isFinite(score)) continue;
+    rows.push({ repository: report.repository, person: ["cast", "bots", "humans"].includes(category) ? null : awardPerson(report, category), score,
+      headline:award.headline, value: award.value, source: award.evidence[0]?.url ?? report.url, capturedAt: report.capturedAt,
+      sampled: !report.coverage.periodComplete, inspected: report.coverage.detailsRead, cast: ["cast", "bots", "humans"].includes(category) ? contributors(report).filter(row => category === "bots" ? row.author.bot : category === "humans" ? !row.author.bot : true).slice(0, 3).map(row => row.author) : undefined, castCount: ["cast", "bots", "humans"].includes(category) ? contributors(report).filter(row => category === "bots" ? row.author.bot : category === "humans" ? !row.author.bot : true).length : undefined, crewLabel: category === "bots" ? "Bot accounts" : "Contributors", repoImageUrl:report.profile?.imageUrl, repoOrganization:report.profile?.ownerOrganization, repoOwner: report.profile?.owner ?? null, stars: report.profile?.stars ?? null, language: report.profile?.language ?? null });
   }
   return rows.sort((a, b) => (category === "fast" ? a.score - b.score : b.score - a.score) || a.repository.localeCompare(b.repository));
 }

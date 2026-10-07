@@ -1,9 +1,12 @@
 import { parseRepository } from "../src/core.js";
 import { parseStarHistory, type StarHistory } from "../src/star-history.js";
+import { readCatalog } from "./indexing.js";
 import type { Store } from "./http.js";
 export async function readStars(store: Store, repository: string): Promise<StarHistory | null> {
   try {
-    const value = JSON.parse(await store.get(`stars:${repository.toLowerCase()}`) ?? "null") as StarHistory | null;
+    const catalog = await readCatalog(store);
+    const key = catalog.datasetId && catalog.selected.some(name => name.toLowerCase() === repository.toLowerCase()) ? `dataset:${catalog.datasetId}:stars:${repository.toLowerCase()}` : `stars:${repository.toLowerCase()}`;
+    const value = JSON.parse(await store.get(key) ?? "null") as StarHistory | null;
     if (!value || !Number.isFinite(Date.parse(value.capturedAt)) || !Array.isArray(value.days) || value.days.length > 30 || !value.days.every(row => /^\d{4}-\d{2}-\d{2}$/.test(row.day) && Number.isSafeInteger(row.added) && row.added >= 0) || new Set(value.days.map(row => row.day)).size !== value.days.length) return null;
     return value;
   } catch { return null; }

@@ -4,11 +4,11 @@ import { initWasm, Resvg, type InitInput } from "@resvg/resvg-wasm";
 import { avatarSource, contributors, hook, type LeaderboardRow } from "../src/catalog.js";
 import type { Report } from "../src/core.js";
 import { escapeHtml } from "../src/view.js";
-export type OgCard = { title: string; description: string; columns: { title: string; name: string; value: string; category?: string; photoId?: string; photoIds?: string[]; rest?: number }[]; ownerId?: string; category?: string; footer: string };
+export type OgCard = { title: string; description: string; columns: { title: string; name: string; value: string; category?: string; photoId?: string; photoIds?: string[]; rest?: number }[]; ownerId?: string; repoImageUrl?: string; category?: string; footer: string };
 export function reportCard(report: Report): OgCard {
   const cast = contributors(report), lead = cast[0];
   const deletion = report.awards.find(award => award.id === "delete"), comments = report.awards.find(award => award.id === "comments");
-  return { title: report.repository, description: hook(report), ownerId: report.profile?.owner ? avatarSource(report.profile.owner) : undefined,
+  return { title: report.repository, description: hook(report), ownerId: report.profile?.owner ? avatarSource(report.profile.owner) : undefined, repoImageUrl:report.profile?.imageUrl,
     columns: [
       { category: "merge", title: "MERGE MACHINE", name: lead ? `@${lead.author.login}` : "Next chapter pending", value: lead ? `${lead.merges} merged PRs` : "No observed merges", photoId: lead ? avatarSource(lead.author) : undefined },
       { category: "delete", title: "DELETE CLUB", name: deletion?.headline ?? "No winner yet", value: deletion?.value || "No diff counts", photoId: (() => { const author = report.facts.details.find(pr => pr.number === deletion?.evidence[0]?.number)?.author; return author ? avatarSource(author) : undefined; })() },
@@ -35,7 +35,7 @@ export function ogSvg(card: OgCard, images: Map<string, string>): string {
       ${faces ? `${faces}${column.rest ? `<circle cx="${x + 182}" cy="331" r="29" fill="#253D2B" stroke="#142C19" stroke-width="3"/>${text(`+${column.rest}`, x + 161, 339, 20)}` : ""}` : image ? `<image x="${x + 24}" y="302" width="58" height="58" href="${image}" clip-path="url(#face-${index})"/>` : `<circle cx="${x + 53}" cy="331" r="29" fill="${color.accent}"/>`}
       ${text(clip(column.name, 23), x + 24, 403, 26, "#FAFAFA", 500)}${text(clip(column.value, 31), x + 24, 451, 21, "#FAFAFA", 500)}`;
   }).join("");
-  const owner = card.ownerId ? images.get(card.ownerId) : null;
+  const owner = images.get("repo-art") ?? (card.ownerId ? images.get(card.ownerId) : null);
   const description = clip(card.description, 137), split = description.lastIndexOf(" ", 88);
   const lines = description.length > 88 && split > 0 ? [description.slice(0, split), description.slice(split + 1)] : [description];
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><defs><linearGradient id="ground" x2="1" y2="1"><stop stop-color="#131416"/><stop offset="1" stop-color="#1A2420"/></linearGradient>${card.columns.map((_, index) => `<clipPath id="face-${index}"><circle cx="${64 + index * 365 + 53}" cy="331" r="29"/></clipPath>`).join("")}${card.columns.flatMap((_, index) => [0, 1, 2].map(face => `<clipPath id="cast-${index}-${face}"><circle cx="${64 + index * 365 + 53 + face * 43}" cy="331" r="29"/></clipPath>`)).join("")}<clipPath id="owner"><rect x="1040" y="66" width="96" height="96" rx="24"/></clipPath></defs>

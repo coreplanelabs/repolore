@@ -1,10 +1,11 @@
 import { parseRepository, replayReport, type Report } from "./core.js";
 import { avatarPath, CATEGORIES, repositoryFromPath, repositoryPath } from "./catalog.js";
-import { cardsMarkup, standingsMarkup, castFaces, hook, boardMarkup, navigationMarkup, cohortMarkup, suggestionsMarkup, glyph } from "./view.js";
+import { cardsMarkup, standingsMarkup, castFaces, hook, boardMarkup, navigationMarkup, cohortMarkup, suggestionsMarkup, glyph, boardNote, championsMarkup, type Champion } from "./view.js";
 import { icon, deckArtwork } from "./icons.js";
 import { chartsMarkup } from "./charts.js";
 import type { DailyPoint } from "./analytics.js";
 import type { LeaderboardRow } from "./catalog.js";
+import { friendlyTimestamp } from "./dates.js";
 import { setupMobileHeader } from "./mobile.js";
 import { topTenResult } from "./celebration.js";
 import { setupHelp } from "./help.js";
@@ -22,9 +23,9 @@ setupHelp();
 const showHeader = setupMobileHeader();
 const form = element<HTMLFormElement>("repo-form"), input = element<HTMLInputElement>("repo-input"), submit = element<HTMLButtonElement>("submit-button");
 const result = element("result"), loading = element("loading"), error = element("error");
-type BoardData = { category: string; rows: LeaderboardRow[]; cohort?: string; warming?: boolean; selected?: number; provisional?: boolean };
+type BoardData = { category: string; rows: LeaderboardRow[]; cohort?: string; warming?: boolean; selected?: number; provisional?: boolean; limit?: number; total?: number; indexed?: number; refreshedAt?: string };
 const boardCache = new Map<string, BoardData>(), celebrated = new Set<string>();
-let homeRows: LeaderboardRow[] | null = null;
+let homeRows: LeaderboardRow[] | null = null, homeChampions: Champion[] = [];
 const routeNotice = document.createElement("div"); routeNotice.className = "route-notice"; routeNotice.role = "alert"; routeNotice.hidden = true; document.body.append(routeNotice);
 const cache = new Map<string, Report>();
 const presentationCache = new Map<string, { history: DailyPoint[]; comparison: LeaderboardRow[]; stars?: StarHistory | null; neighbors?: CardStandings }>();
@@ -71,7 +72,7 @@ function render(report: Report, presentation?: { history: DailyPoint[]; comparis
   element("repo-hook").textContent = hook(report);
   element("header-cast").innerHTML = castFaces(report);
   element("insights").innerHTML = chartsMarkup(report, presentation?.history, presentation?.comparison, presentation?.stars);
-  submit.textContent = "Show repo";
+  submit.replaceChildren(document.createTextNode("Give me the lore "),icon("arrow"));
   element<HTMLDetailsElement>("repo-lookup").open = false;
   const owner = report.profile?.owner, avatar = element<HTMLImageElement>("repo-avatar");
   avatar.hidden = !owner;
@@ -80,7 +81,7 @@ function render(report: Report, presentation?: { history: DailyPoint[]; comparis
   element("repo-meta").textContent = repoLabels.join(" · ");
   const c = report.coverage;
   element("scope-text").textContent = `90-DAY WINDOW · ${c.mergedObserved} OBSERVED MERGES · ${c.detailsRead} PR DIFFS INSPECTED`;
-  element("read-time").textContent = `READ ${new Date(report.capturedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}`;
+  element("read-time").textContent = `READ ${friendlyTimestamp(report.capturedAt, undefined, navigator.language)}`;
   element("awards").innerHTML = cardsMarkup(report, presentation?.neighbors);
   element("standings").innerHTML = standingsMarkup(report);
   element("coverage-text").textContent = `Read ${c.closedRead} recently updated closed PRs and ${c.openRead} oldest open PRs. ${c.periodComplete ? "The listing covered the 90-day merge window." : "The closed-PR listing is a bounded sample; some merges can be missing."} Diff awards cover ${c.detailsRead} of ${c.detailsRequested} selected recent merged PRs.`;
@@ -139,9 +140,11 @@ function reward(report: Report, standings?: CardStandings, submitted = false): v
   if (submitted || (!celebrated.has(key) && topTenResult(standings))) celebrate();
   celebrated.add(key);
 }
+function localTimes(): void { document.querySelectorAll<HTMLElement>("[data-local-time]").forEach(node => { const value = node.getAttribute("datetime"); if (value) node.textContent = friendlyTimestamp(value, undefined, navigator.language); }); }
+localTimes();
 function metadata(title: string, description: string, path: string, image: string): void {
   document.title = title; element<HTMLLinkElement>("canonical").href = location.origin + path;
-  for (const [id, value] of Object.entries({ "og-title": title, "og-description": description, "og-url": location.origin + path, "og-image": image, "twitter-image": image })) element<HTMLMetaElement>(id).content = value;
+  for (const [id, value] of Object.entries({ "og-title": title, "og-description": description, "og-url": location.origin + path, "og-image": image, "twitter-image": image, "twitter-title":title,"twitter-description":description,"twitter-alt":title+": "+description,"og-alt":title+": "+description })) element<HTMLMetaElement>(id).content = value;
   document.querySelector<HTMLMetaElement>('meta[name="description"]')!.content = description;
   const structured = document.querySelector<HTMLScriptElement>('script[type="application/ld+json"]');
   if (structured) structured.textContent = JSON.stringify({ "@context": "https://schema.org", "@type": "WebPage", name: title, description, url: location.origin + path, image });
@@ -152,26 +155,26 @@ function renderBoard(data: BoardData): void {
   result.hidden = true; loading.hidden = true; error.hidden = true; element("board").hidden = false; element("board").dataset.category = data.category;
   element("board-title").textContent = CATEGORIES[data.category].name; element("board-description").textContent = CATEGORIES[data.category].measure;
   element("board-emblem").innerHTML = element("board-watermark").innerHTML = glyph(data.category);
-  rail.innerHTML = navigationMarkup(data.category, data.cohort); rail.scrollLeft = x;
-  element("cohort-controls").innerHTML = cohortMarkup(data); element("board-rows").innerHTML = boardMarkup(data.rows); imageFallbacks();
-  metadata(`${CATEGORIES[data.category].name} — Repo Lore`, CATEGORIES[data.category].measure, `/leaderboards/${data.category}`, `${location.origin}/_og/leaderboards/${data.category}.png?cohort=${data.cohort ?? "trending"}`);
+  rail.innerHTML = navigationMarkup(data.category, data.cohort, data.limit); rail.scrollLeft = x;
+  element("cohort-controls").innerHTML = cohortMarkup(data); element("board-note").innerHTML = boardNote(data); localTimes(); element("board-rows").innerHTML = boardMarkup(data.rows); imageFallbacks();
+  metadata(`${data.limit===100 ? "Top 100 · " : ""}${CATEGORIES[data.category].name} — Repo Lore`, CATEGORIES[data.category].measure, `/leaderboards/${data.category}${data.limit === 100 ? "/top-100" : ""}`, `${location.origin}/_og/leaderboards/${data.category}.png?cohort=${data.cohort ?? "trending"}`);
   if (!wasBoard) window.scrollTo({ top: 0, behavior: "instant" });
   rail.querySelector<HTMLElement>('[aria-current="page"]')?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" }); showHeader();
 }
 async function loadBoard(url: URL, push = true): Promise<void> {
-  const category = url.pathname.slice(14), cohort = url.searchParams.get("cohort") === "top" ? "top" : "trending", key = `${category}:${cohort}`, run = ++generation;
+  const category = url.pathname.split("/")[2], limit = url.pathname.endsWith("/top-100") ? 100 : 10, cohort = url.searchParams.get("cohort") === "top" ? "top" : "trending", key = `${category}:${cohort}:${limit}`, run = ++generation;
   routeNotice.hidden = true; document.documentElement.classList.add("is-navigating");
   try {
     let data = boardCache.get(key);
     if (!data) {
-      const response = await fetch(`/api/leaderboards/${category}?cohort=${cohort}`, { signal: AbortSignal.timeout(15_000) });
+      const response = await fetch(`/api/leaderboards/${category}?cohort=${cohort}&limit=${limit}`, { signal: AbortSignal.timeout(15_000) });
       if (!response.ok) throw new Error("This leaderboard could not load. Try again.");
       data = await response.json() as BoardData;
-      if (data.category !== category || data.cohort !== cohort || !Array.isArray(data.rows)) throw new Error("This leaderboard could not load. Try again.");
+      if (data.category !== category || data.cohort !== cohort || data.limit !== limit || !Array.isArray(data.rows)) throw new Error("This leaderboard could not load. Try again.");
       boardCache.set(key, data);
     }
     if (run !== generation) return;
-    renderBoard(data); if (push) history.pushState(null, "", `/leaderboards/${category}${cohort === "top" ? "?cohort=top" : ""}`);
+    renderBoard(data); if (push) history.pushState(null, "", `/leaderboards/${category}${limit === 100 ? "/top-100" : ""}${cohort === "top" ? "?cohort=top" : ""}`);
   } catch { if (run === generation) { routeNotice.textContent = "This leaderboard could not load. Try again."; routeNotice.hidden = false; } }
   finally { if (run === generation) { document.documentElement.classList.remove("is-navigating"); input.disabled = submit.disabled = false; } }
 }
@@ -180,8 +183,8 @@ async function home(push = true): Promise<void> {
   routeNotice.hidden = true; document.documentElement.classList.remove("has-report", "has-board", "is-navigating"); element<HTMLDetailsElement>("repo-lookup").open = true;
   metadata("Repo Lore — your repo has lore", "The people, pull requests, and plot twists behind your favorite GitHub repo.", "/", location.origin + "/_og/site.png");
   if (push) history.pushState(null, "", "/"); window.scrollTo({ top: 0, behavior: "instant" }); showHeader();
-  if (!homeRows) try { const response = await fetch("/api/home", { signal: AbortSignal.timeout(10_000) }); if (response.ok) homeRows = (await response.json() as { suggestions: LeaderboardRow[] }).suggestions; } catch { /* Repo input remains available. */ }
-  if (run === generation) element("repo-suggestions").innerHTML = suggestionsMarkup(homeRows ?? []);
+  if (!homeRows) try { const response = await fetch("/api/home", { signal: AbortSignal.timeout(10_000) }); if (response.ok) { const data=await response.json() as {suggestions:LeaderboardRow[];champions:Champion[]}; homeRows=data.suggestions; homeChampions=data.champions; } } catch { /* Repo input remains available. */ }
+  if (run === generation) { element("repo-suggestions").innerHTML = suggestionsMarkup(homeRows ?? []); element("champions").innerHTML=championsMarkup(homeChampions); }
 }
 form.addEventListener("submit", event => { event.preventDefault(); void load(input.value, true, "", true); });
 document.addEventListener("click", event => {
@@ -193,20 +196,20 @@ document.addEventListener("click", event => {
   const url = new URL(link.href); if (url.origin !== location.origin) return;
   const repository = repositoryFromPath(url.pathname);
   if (repository) { event.preventDefault(); void load(repository, true, url.hash); }
-  else if (url.pathname.startsWith("/leaderboards/") && CATEGORIES[url.pathname.slice(14)]) { event.preventDefault(); void loadBoard(url); }
+  else if (url.pathname.startsWith("/leaderboards/") && CATEGORIES[url.pathname.split("/")[2]]) { event.preventDefault(); void loadBoard(url); }
   else if (url.pathname === "/") { event.preventDefault(); void home(); }
 });
 window.addEventListener("popstate", () => {
   const url = new URL(location.href), repository = repositoryFromPath(url.pathname);
   if (repository) void load(repository, false, url.hash);
-  else if (url.pathname.startsWith("/leaderboards/") && CATEGORIES[url.pathname.slice(14)]) void loadBoard(url, false);
+  else if (url.pathname.startsWith("/leaderboards/") && CATEGORIES[url.pathname.split("/")[2]]) void loadBoard(url, false);
   else void home(false);
 });
 try {
-  const initialHome = JSON.parse(document.getElementById("home-data")?.textContent ?? "null") as LeaderboardRow[] | null;
-  if (initialHome) homeRows = initialHome;
+  const initialHome = JSON.parse(document.getElementById("home-data")?.textContent ?? "null") as {suggestions:LeaderboardRow[];champions:Champion[]} | null;
+  if (initialHome) { homeRows=initialHome.suggestions; homeChampions=initialHome.champions; }
   const initialBoard = JSON.parse(document.getElementById("board-data")?.textContent ?? "null") as BoardData | null;
-  if (initialBoard && CATEGORIES[initialBoard.category]) boardCache.set(`${initialBoard.category}:${initialBoard.cohort ?? "trending"}`, initialBoard);
+  if (initialBoard && CATEGORIES[initialBoard.category]) boardCache.set(`${initialBoard.category}:${initialBoard.cohort ?? "trending"}:${initialBoard.limit ?? 10}`, initialBoard);
 } catch { /* A route read can recover a damaged bootstrap. */ }
 const bootstrap = document.getElementById("repo-data")?.textContent;
 if (bootstrap && bootstrap !== "null") {

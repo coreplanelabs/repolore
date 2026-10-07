@@ -191,3 +191,31 @@ Cloudflare docs:
 https://developers.cloudflare.com/workers/static-assets/binding/
 https://developers.cloudflare.com/workers/configuration/routing/custom-domains/
 https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/
+
+## Daily index job
+
+`.github/workflows/refresh-index.yml` runs `scripts/refresh-index.mjs --limit=1000
+--publish` daily at 10:00 UTC and supports manual dispatch. It builds from main,
+uses a read-only ephemeral GitHub workflow token, caches same-day checkpoints,
+and serializes publishers. It never deploys code or changes Access. The legacy
+Worker cron refuses index writes after the daily catalog is selected.
+
+Provision a separate production environment secret `CLOUDFLARE_INDEX_TOKEN`:
+**Account → Workers KV Storage → Edit**, scoped to **coreplane-infra** only.
+Cloudflare scopes this permission to an account, so the code fixes the exact
+Repo Lore namespace ID and accepts no target override. Do not broaden or reuse
+the existing deployment token. Choose an expiry and rotate before expiry.
+The script refuses to start CI publication without this secret. The account-owned token `repolore-daily-index` was provisioned on October 7, 2026 and expires January 5, 2027; rotate it before that date.
+
+For a first capture, the maintainer can run the same script with `--use-gh
+--publish-via-wrangler`; that explicitly uses existing local logins, without
+extracting credentials. Upload compatible Worker code before publishing the
+first version-2 dataset. The script writes immutable seven-day dataset keys,
+waits for propagation, then changes `index:catalog` last. A failed data batch
+leaves the previous catalog selected. Local preview seeds are never published.
+
+After setup, dispatch `Refresh daily index` on main and verify the job succeeds,
+its summary counts, the ten-result board, the dedicated top-100 route, and the
+last-refresh timestamp. Scheduled refreshes preserve the previous successful
+index if capture or publication fails. Check failures in GitHub Actions; a
+"Refreshed daily" label is cadence, while the timestamp shows actual freshness.

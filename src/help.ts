@@ -1,3 +1,4 @@
+import { friendlyTimestamp } from "./dates.js";
 import { helpPosition } from "./tooltip-position.js";
 import { icon } from "./icons.js";
 export function setupHelp(): void {
@@ -12,12 +13,13 @@ export function setupHelp(): void {
   function copy(target: HTMLElement, value: string): void {
     target.replaceChildren(...value.split("\n").filter(Boolean).map(line => {
       const p = document.createElement("p"), colon = line.indexOf(":");
-      if (colon > 0 && ["Trending", "Top stars", "Read", "PRs inspected", "Coverage", "Stars added", "Ranks", "Ties"].includes(line.slice(0, colon))) {
+      if (colon > 0 && ["Trending", "Top stars", "Read", "PRs inspected", "PRs checked", "PRs read", "Coverage", "Stars added", "Ranks", "Ties"].includes(line.slice(0, colon))) {
         const label = document.createElement("strong"); label.textContent = line.slice(0, colon + 1); p.append(label, document.createTextNode(line.slice(colon + 1)));
       } else p.textContent = line;
       return p;
     }));
   }
+  const helpCopy = (target: HTMLElement) => `${target.dataset.readAt ? `Read: ${friendlyTimestamp(target.dataset.readAt, undefined, navigator.language)}\n` : ""}${target.dataset.help ?? ""}`;
   let active: HTMLElement | null = null, returnFocus: HTMLElement | null = null;
   function hide(): void { bubble.hidden = true; active?.removeAttribute("aria-describedby"); active = null; }
   function place(): void {
@@ -28,7 +30,7 @@ export function setupHelp(): void {
   }
   function show(target: HTMLElement): void {
     if (!canHover() || sheet.open) return;
-    hide(); active = target; heading.textContent = target.dataset.helpTitle ?? "Behind the number"; copy(text, target.dataset.help ?? "");
+    hide(); active = target; heading.textContent = target.dataset.helpTitle ?? "Behind the number"; copy(text, helpCopy(target));
     bubble.hidden = false; active.setAttribute("aria-describedby", bubble.id); place();
   }
   const targetOf = (event: Event): HTMLElement | null => event.target instanceof Element ? event.target.closest<HTMLElement>("[data-help]") : null;
@@ -38,7 +40,7 @@ export function setupHelp(): void {
   document.addEventListener("focusout", hide);
   document.addEventListener("click", event => {
     const target = targetOf(event); if (!target || canHover()) return;
-    event.preventDefault(); hide(); returnFocus = target; sheetHeading.textContent = target.dataset.helpTitle ?? "Behind the number"; copy(sheetText, target.dataset.help ?? ""); sheet.showModal();
+    event.preventDefault(); hide(); returnFocus = target; sheetHeading.textContent = target.dataset.helpTitle ?? "Behind the number"; copy(sheetText, helpCopy(target)); sheet.showModal();
   });
   close.addEventListener("click", () => sheet.close());
   sheet.addEventListener("click", event => { if (event.target === sheet) sheet.close(); });

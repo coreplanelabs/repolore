@@ -33,10 +33,12 @@ another port. Saved snapshots live in `.data`, which is ignored by Git.
 | --- | --- |
 | Merge Machine | Author with the most observed merges in the snapshot |
 | Delete Club | Largest deletion on one inspected merged PR; additions stay visible |
-| Comment Magnet | Most inline review comments on one inspected merged PR |
+| Comment Magnet | Most discussion comments on one inspected merged PR |
 | The Cast | Distinct author accounts, including bots; top three photos and a rest count |
 | The Long Goodbye | Oldest open PR by calendar age |
 | Fastest Lap | Shortest observed interval between PR opening and merge |
+| Big Bang | Most lines added in one inspected merged PR |
+| Human Touch | Observed merges attributed to GitHub user accounts |
 | Bot Party | Number of observed merged PRs authored by GitHub bot accounts |
 
 These do not measure developer skill, AI authorship, or contribution policy.
@@ -46,13 +48,12 @@ Bot participation uses GitHub's account type, not an authorship guess.
 
 Cross-repo leaderboards compare each repo's observed winning value. Delete Club
 compares **one PR**, not a person's total deleted lines. Every row keeps its PR
-link, read date, and inspected count. Some repositories have fewer than ten
-eligible inspected merges. See [METHOD.md](METHOD.md) for calculations and limits.
+link, read date, and inspected count. Some repositories have few eligible merged PRs. See [METHOD.md](METHOD.md) for calculations and limits.
 
 ## Pages and previews
 
 - `/owner/repo`: server-rendered result, canonical URL, repo identity, and metadata.
-- `/leaderboards/delete`: cross-repo Delete Club; the other six categories have pages too.
+- `/leaderboards/delete`: cross-repo Delete Club; the other eight categories have pages too.
 - `/_og/owner/repo.png?v=<capture timestamp>`: a 1200 × 630 PNG for that snapshot.
 - `/_avatar/u/<id>` and `/_avatar/in/<app-id>`: bounded GitHub photo proxies.
 - `/sitemap.xml`: known popular repo pages and leaderboard pages.
@@ -90,30 +91,50 @@ is sent only to GitHub's API, and never goes to browsers, avatars, HTML, or cach
 Local development uses `REPOLORE_GITHUB_TOKEN` only when explicitly provided.
 No runtime reads the developer's GitHub CLI login or switches credentials.
 
-## Populate comparisons
+## Daily comparisons
 
-This is an explicit maintainer operation using the existing `gh` login for
-public reads. It never changes a repository or stores the credential.
+`Refresh daily index` runs every day at 10:00 UTC on GitHub Actions. The same
+script performs the first backfill and daily refreshes:
 
 ```sh
 bun run build
-bun run capture --popular
-bun run seed
-wrangler kv bulk put .data/seed.json --binding REPORTS --remote
+# Explicit maintainer reads through your existing gh login; no credential export.
+node scripts/refresh-index.mjs --use-gh --limit=1000
+# Capture and publish with the existing, authorized Wrangler OAuth login.
+node scripts/refresh-index.mjs --use-gh --limit=1000 --publish-via-wrangler
 ```
 
-The starting baseline is in `src/catalog.ts`. A single repo can be captured with
-`bun run capture owner/repo`. Leaderboard views read saved comparisons.
+The script discovers up to 1,000 most-starred public, non-fork, non-archived repos.
+For each it checks public metadata, then reads up to 100 recently updated merged
+PRs, 20 discussion-heavy merged PR candidates, and the 30 oldest open PRs.
+GitHub's aggregate PR discussion count supplies Comment Magnet. Missing inline
+counts remain unknown. Legacy anonymous reports use inline counts and do not
+enter the aggregate Comment Magnet board.
 
-With a dedicated `GITHUB_TOKEN`, a fifteen-minute Worker cron refreshes up to
-four repos per run. Each day it discovers up to 100 public, non-fork, non-archived
-repos with the most stars. A full 100-repo pass takes about 6.25 hours. It retains
-up to 90 daily readings; same-day captures replace that day rather than creating
-fake history. Trending selects up to 20 indexed repos by stars added over the last 30 days
-from GitHub's aggregate daily history. Top stars uses the discovered shortlist. Both groups rank
-the selected award, not stars. Selection and missing-history explanations remain in the help control. Without a token the cron
-does no GitHub reads. An arbitrary queried repo is compared against the index,
-but is not permanently added to it.
+Main boards show ten results. **Show top 100** opens
+`/leaderboards/<category>/top-100`. Top stars ranks the broad discovered pool;
+Trending ranks members with positive star additions over the last 30 days.
+Every award ranks its own numeric score, not star count. No LLM chooses repos.
+These are pool rankings, not a claim to all GitHub PRs.
+
+Checkpoints in `.data/index` let an interrupted same-day run resume. CI restores missing checkpoints and daily histories from the last published dataset when its Actions cache is cold. GitHub
+quota resets pause capture rather than discard it. Successful reads add actual
+daily history points; missing days stay missing. A refresh with fewer than 100
+readable repos or more than 10% failed captures cannot publish. Only successful,
+same-day reports enter the new rankings.
+
+Publication writes versioned dataset keys first and switches the catalog last,
+after a propagation grace period. Failed data writes leave the old catalog
+selected. KV is eventually consistent; a temporarily missing new board returns
+a plain unavailable response instead of combining datasets. The site displays
+**Refreshed daily** and the last successful refresh in the viewer's timezone.
+GitHub Actions can start scheduled runs late; this is a daily cadence, not an
+exact-time service guarantee.
+
+CI uses its ephemeral read-only `GH_TOKEN` and the separate production secret
+`CLOUDFLARE_INDEX_TOKEN` for KV publication. See [DEPLOYMENT.md](DEPLOYMENT.md).
+The older Worker refresh hook stops writing once a daily dataset is active.
+Arbitrary lookups use a temporary cache and do not enlarge the indexed pool.
 
 Repo graphs show human/bot merge shares, sampled daily merge activity, daily star additions and actual total-star readings, and the repo's Comment Magnet comparison. Unknown accounts stay
 separate. Missing days and history are not fabricated.
@@ -203,3 +224,9 @@ flicker. Scrolling retains browser-native inertia. Input text is at least 16px
 to avoid iOS focus zoom; the mobile viewport and touch settings disable page
 zoom where supported by the browser. Safe-area padding protects header/footer
 controls. Only award artwork and the brand logo rotate on hover.
+
+The nine-card homepage grid uses the #1 result from each Trending award board and links
+to that board. Repo suggestions use custom repository artwork when GitHub has
+one, organization logos otherwise, and a project monogram for personal repos
+without artwork. Contributor faces stay on the contributor results. Artwork is
+proxied from validated GitHub image hosts; no credential is sent to image hosts.
