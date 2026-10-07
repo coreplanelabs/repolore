@@ -102,8 +102,8 @@ test("complete small scan has bounded calls, readable JSON summary, and a guide"
   const calls: string[] = []; const result = await collect(routes([row(1), row(2)]), calls);
   assert.equal(calls.length, 6); assert.equal(result.coverage.detailsRead, 2);
   assert.equal(result.contributingUrl, "https://github.com/sample/project/blob/main/CONTRIBUTING.md");
-  assert.match(result.summary, /I found 2 PRs/); assert.match(plainReport(result), /Scope:/);
-  assert.match(JSON.stringify(result), /I found 2 PRs/);
+  assert.match(result.summary, /Found 2 PRs/); assert.match(plainReport(result), /Scope:/);
+  assert.match(JSON.stringify(result), /Found 2 PRs/);
 });
 test("large repo stays sampled and inspects at most ten merged PRs", async () => {
   const closed = Array.from({ length: 100 }, (_, i) => row(i + 1)); const calls: string[] = [];

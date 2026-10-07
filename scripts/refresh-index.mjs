@@ -14,6 +14,7 @@ import {
 } from "../.server-dist/src/star-history.js";
 import { appendPoint } from "../.server-dist/src/analytics.js";
 import { restorePublishedIndex } from "./index-restore.mjs";
+import { captureReason } from "./index-diagnostics.mjs";
 import { publishIndex } from "./index-publication.mjs";
 import { CATEGORIES, leaderboard } from "../.server-dist/src/catalog.js";
 const args = process.argv.slice(2),
@@ -29,6 +30,13 @@ if (!useGh && !process.env.GH_TOKEN)
 if (args.includes("--publish") && !process.env.CLOUDFLARE_INDEX_TOKEN)
 	throw new Error(
 		"Set the dedicated CLOUDFLARE_INDEX_TOKEN before publishing.",
+	);
+if (
+	(args.includes("--publish") || args.includes("--publish-via-wrangler")) &&
+	limit !== 1000
+)
+	throw new Error(
+		"Publication requires the full 1,000-repo pool. Smaller limits are for local checks.",
 	);
 const run = promisify(execFile),
 	root = new URL("../.data/index/", import.meta.url);
@@ -151,6 +159,7 @@ for (let offset = 0; offset < selected.length; offset += 6) {
 	await Promise.all(
 		batch.map(async (repository) => {
 			const file = repository.toLowerCase().replace("/", "--") + ".json";
+			let phase = "PR facts";
 			try {
 				let report;
 				try {
@@ -190,17 +199,27 @@ for (let offset = 0; offset < selected.length; offset += 6) {
 					);
 				}
 				if (!report.profile?.artworkChecked) {
-					report = await collectRepositoryArtwork(
-						report,
-						adapter,
-						AbortSignal.timeout(15_000),
-					);
-					await writeFile(
-						new URL("reports/" + file, root),
-						JSON.stringify(report),
-					);
+					phase = "Repository artwork";
+					try {
+						report = await collectRepositoryArtwork(
+							report,
+							adapter,
+							AbortSignal.timeout(15_000),
+						);
+						await writeFile(
+							new URL("reports/" + file, root),
+							JSON.stringify(report),
+						);
+					} catch (cause) {
+						console.warn("Optional index read unavailable", {
+							repository,
+							phase,
+							reason: captureReason(cause),
+						});
+					}
 				}
 
+				phase = "Star history";
 				try {
 					let fresh = false;
 					try {
@@ -218,9 +237,14 @@ for (let offset = 0; offset < selected.length; offset += 6) {
 							JSON.stringify(parseStarHistory(raw, Date.now())),
 						);
 					}
-				} catch {
-					/* Retain last valid aggregate history. */
+				} catch (cause) {
+					console.warn("Optional index read unavailable", {
+						repository,
+						phase,
+						reason: captureReason(cause),
+					});
 				}
+				phase = "Daily history";
 				let history = [];
 				try {
 					history = JSON.parse(
@@ -233,7 +257,12 @@ for (let offset = 0; offset < selected.length; offset += 6) {
 				);
 				captured.add(repository);
 				done++;
-			} catch {
+			} catch (cause) {
+				console.error("Index capture failed", {
+					repository,
+					phase,
+					reason: captureReason(cause),
+				});
 				failures.push(repository);
 			}
 		}),
@@ -285,7 +314,8 @@ for (const repository of selected.filter((name) => captured.has(name))) {
 		const history = JSON.parse(
 			await readFile(new URL("stars/" + file, root), "utf8"),
 		);
-		stars.set(repository, history);
+		if (history.capturedAt.slice(0, 10) === stamp.slice(0, 10))
+			stars.set(repository, history);
 		entries.push({ key: "stars:" + key, value: JSON.stringify(history) });
 	} catch {
 		/* No invented star history. */
@@ -387,6 +417,17 @@ if (
 	failures.length > selected.length * 0.1
 )
 	throw new Error("Index incomplete; preserve the previous published dataset.");
+
+if (args.includes("--publish") || args.includes("--publish-via-wrangler"))
+	for (const [category, rows] of Object.entries(rankings)) {
+		if (
+			rows.length < 100 ||
+			rows.filter((row) => (row.starAdded ?? 0) > 0).length < 100
+		)
+			throw new Error(
+				`Not enough readable results for ${CATEGORIES[category].name}'s top 100. Previous dataset stays selected.`,
+			);
+	}
 
 if (args.includes("--publish") || args.includes("--publish-via-wrangler")) {
 	await publishIndex(entries, {

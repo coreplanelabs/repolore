@@ -83,7 +83,7 @@ export function suggestionsMarkup(rows: LeaderboardRow[]): string {
 }
 export function cohortMarkup(board: { category: string; cohort?: string; provisional?: boolean; selected?: number; warming?: boolean; limit?: number }): string {
   const cohort = board.cohort ?? "trending", suffix = board.limit === 100 ? "/top-100" : "";
-  const help = `Trending: Repos in this pool that gained stars in 30 days.\n\nTop stars: ${board.provisional ? `${board.selected ?? 8} saved repos for now. Top-100 star index comes next.` : "A pool of up to 1,000 most-starred public repos."}\n\nRanks follow the selected award.${board.warming ? "\nStar history pending; showing saved repos." : ""}`;
+  const help = `Trending: Pool members with stars added over 30 days.\n\nTop stars: ${board.provisional ? `${board.selected ?? 8} saved repos for now. Top-100 star index comes next.` : "A pool of up to 1,000 most-starred public repos."}\n\nRanks follow the selected award.${board.warming ? "\nStar history pending; showing saved repos." : ""}`;
   return `<span class="cohort-label">EXPLORE</span><div class="cohort-switch"><a href="/leaderboards/${board.category}${suffix}"${cohort === "trending" ? ' aria-current="page"' : ""}>${glyph("trend")}<span>Trending</span></a><a href="/leaderboards/${board.category}${suffix}?cohort=top"${cohort === "top" ? ' aria-current="page"' : ""}>${glyph("star")}<span>Top stars</span></a></div>${helpButton(help, "How repo pools are chosen", "Choose your league")}`;
 }
 export function boardNote(data: { category: string; cohort?: string; limit?: number; total?: number; indexed?: number; selected?: number; refreshedAt?: string }): string {

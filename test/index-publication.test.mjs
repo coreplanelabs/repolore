@@ -113,3 +113,9 @@ test("a cold daily job restores published checkpoints without replacing newer lo
 		await rm(folder, { recursive: true, force: true });
 	}
 });
+test('capture diagnostics never echo arbitrary provider errors or credentials',async()=>{
+ const {captureReason}=await import('../scripts/index-diagnostics.mjs');
+ assert.equal(captureReason(new Error('Bearer secret-value from a response')),'Read could not be completed.');
+ assert.equal(captureReason(new Error('GitHub read failed (403).')),'GitHub returned HTTP 403.');
+ await assert.rejects(publishIndex(entries,{token:'test-only',fetch:async()=>new Response('untrusted secret-value body',{status:503}),wait:async()=>{}}),error=>error instanceof Error && /batch 1\/2, HTTP 503/.test(error.message)&&!error.message.includes('secret-value'));
+});

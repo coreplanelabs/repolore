@@ -95,16 +95,21 @@ export async function publishIndex(entries, options) {
 				},
 				body: JSON.stringify(batches[index]),
 			});
-			const result = await response.json();
+			let result = null;
+			try {
+				result = await response.json();
+			} catch {
+				/* Report the status without echoing an API response. */
+			}
 			if (
 				!response.ok ||
-				!result.success ||
-				result.result?.unsuccessful_keys?.length ||
-				(typeof result.result?.successful_key_count === "number" &&
+				!result?.success ||
+				result?.result?.unsuccessful_keys?.length ||
+				(typeof result?.result?.successful_key_count === "number" &&
 					result.result.successful_key_count !== batches[index].length)
 			)
 				throw new Error(
-					"Index publication failed; the previous dataset remains selected.",
+					`Index publication not confirmed: batch ${index + 1}/${batches.length}, HTTP ${response.status}, ${result?.result?.unsuccessful_keys?.length ?? "unknown"} unsuccessful keys. ${index < batches.length - 1 ? "Previous dataset stays selected." : "Read the current catalog before retrying."}`,
 				);
 		}
 	}
