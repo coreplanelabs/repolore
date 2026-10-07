@@ -1,5 +1,7 @@
 import { ArcadeError, collectReport, parseRepository, replayReport, type Report } from "../src/core.js";
-import { CATEGORIES, leaderboard, POPULAR_REPOS, repositoryFromPath, repositoryPath } from "../src/catalog.js";
+import { CATEGORIES, leaderboard, repositoryFromPath, repositoryPath } from "../src/catalog.js";
+import { cohortReports, readCatalog, readHistory, recordIndexed } from "./indexing.js";
+import { relativeRows } from "../src/analytics.js";
 import { pageHtml, safeJson } from "./html.js";
 import { boardCard, ogSvg, reportCard, siteCard, type OgCard } from "./og.js";
 export interface Store { get(key: string): Promise<string | null>; put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void> }
@@ -27,7 +29,8 @@ export function createHandler(options: ServerOptions): (request: Request) => Pro
   async function getReport(repository: string, stamp?: number): Promise<Report> {
     const key = repository.toLowerCase();
     const saved = await cached(repository, stamp);
-    if (saved && (stamp || options.now() - Date.parse(saved.capturedAt) < FRESH_MS)) return saved;
+    const catalog = await readCatalog(options.store), indexed = catalog.selected.some(name => name.toLowerCase() === key);
+    if (saved && (stamp || indexed || options.now() - Date.parse(saved.capturedAt) < 15 * 60_000)) return saved;
     if (stamp) throw new ArcadeError("NOT_FOUND", "This older preview has expired. Open the repo page for its current snapshot.");
     const previous = inFlight.get(key); if (previous) return previous;
     const pending = (async () => {
@@ -42,8 +45,11 @@ export function createHandler(options: ServerOptions): (request: Request) => Pro
         };
         const report = await collectReport(repository, { fetch: adapter, now: options.now(), signal: deadline(24_000) });
         const body = JSON.stringify(report);
-        await options.store.put(`repo:${key}`, body);
-        await options.store.put(`snapshot:${key}:${Date.parse(report.capturedAt)}`, body, { expirationTtl: 7 * 86_400 });
+        if (indexed) await recordIndexed(options.store, report);
+        else {
+          await options.store.put(`repo:${key}`, body, { expirationTtl: 900 });
+          await options.store.put(`snapshot:${key}:${Date.parse(report.capturedAt)}`, body, { expirationTtl: 900 });
+        }
         return report;
       } catch (cause) {
         if (saved && cause instanceof ArcadeError && ["RATE_LIMIT", "NETWORK", "TIMEOUT", "GITHUB"].includes(cause.code)) return { ...saved, notes: [...saved.notes, "A fresh read was unavailable. This is the last saved public snapshot; its original read date is shown."] };
@@ -52,9 +58,10 @@ export function createHandler(options: ServerOptions): (request: Request) => Pro
     })();
     inFlight.set(key, pending); return pending;
   }
-  async function reports(): Promise<Report[]> {
-    const found = await Promise.all(POPULAR_REPOS.map(repository => cached(repository)));
-    return found.filter((report): report is Report => report !== null);
+  async function reports(cohort = "top"): Promise<Report[]> { return (await cohortReports(options.store, cohort)).reports; }
+  async function presentation(report: Report) {
+    const history = await readHistory(options.store, report.repository), comparison = relativeRows(report, await reports(), "comments");
+    return { history, comparison };
   }
   async function avatar(id: string, size: number): Promise<{ bytes: Uint8Array; type: string } | null> {
     const result = await options.fetch(`https://avatars.githubusercontent.com${id}?s=${size}&v=4`, { redirect: "error", signal: deadline(5000), headers: { Accept: "image/png,image/jpeg" } });
@@ -112,16 +119,17 @@ export function createHandler(options: ServerOptions): (request: Request) => Pro
       } else if (path.startsWith("/api/repos/")) {
         const repository = repositoryFromPath(path.slice(10));
         if (!repository) return json({ error: "Use owner/repo." }, 400);
-        result = json(await getReport(repository));
-      } else if (path === "/leaderboards") return response(null, 301, "text/plain", { Location: "/leaderboards/delete" });
+        const report = await getReport(repository); result = json({ ...report, presentation: await presentation(report) });
+      } else if (path === "/leaderboards") return response(null, 301, "text/plain", { Location: "/leaderboards/comments" });
       else if (path.startsWith("/leaderboards/") && CATEGORIES[path.slice(14)]) {
-        const category = path.slice(14), rows = leaderboard(await reports(), category);
-        result = response(pageHtml(await shell(), url.origin, undefined, { category, rows }));
+        const category = path.slice(14), cohort = url.searchParams.get("cohort") === "top" ? "top" : "trending";
+        const data = await cohortReports(options.store, cohort), rows = leaderboard(data.reports, category);
+        result = response(pageHtml(await shell(), url.origin, undefined, { category, rows, cohort, warming: data.warming, selected: data.selected, provisional: data.provisional }));
       } else if (path.startsWith("/_og/") && path.endsWith(".png")) {
         let card: OgCard;
         if (path === "/_og/site.png") card = siteCard();
         else if (path.startsWith("/_og/leaderboards/") && CATEGORIES[path.slice("/_og/leaderboards/".length, -4)]) {
-          const category = path.slice("/_og/leaderboards/".length, -4); card = boardCard(CATEGORIES[category].name, leaderboard(await reports(), category));
+          const category = path.slice("/_og/leaderboards/".length, -4); card = boardCard(CATEGORIES[category].name, leaderboard(await reports(url.searchParams.get("cohort") === "top" ? "top" : "trending"), category));
         } else {
           const repository = repositoryFromPath(path.slice(4, -4));
           if (!repository) return response("Not found", 404, "text/plain");
@@ -134,7 +142,7 @@ export function createHandler(options: ServerOptions): (request: Request) => Pro
         if (repository) {
           const report = await getReport(repository), canonical = repositoryPath(report.repository);
           if (path !== canonical || url.search) return response(null, 301, "text/plain", { Location: canonical });
-          result = response(pageHtml(await shell(), url.origin, report));
+          result = response(pageHtml(await shell(), url.origin, report, undefined, await presentation(report)));
         } else if (path === "/" || path === "/index.html") result = response(pageHtml(await shell(), url.origin));
         else result = await options.assets.fetch(request);
       }

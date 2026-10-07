@@ -46,7 +46,8 @@ Text, JSON and the page use one typed report. JSON retains the normalized input
 facts; offline replay rebuilds the awards instead of trusting saved captions or
 links. A selected evidence file is local input, not fresh provider verification.
 The PNG includes read date, repository, observed merge count and inspected-diff
-count. A page URL reruns a repository and can produce a different later snapshot.
+count. A page URL shows the indexed snapshot or a temporary on-demand capture.
+Later visits can produce a newer snapshot.
 
 The application performs public reads only. It has no email collection, global
 rankings, fake events, sentiment classifier, telemetry, or repository mutations.
@@ -57,7 +58,7 @@ Each category compares the winning **observed** value from the saved snapshot
 of each indexed popular repository. These are not lifetime or comprehensive
 90-day leaderboards. Closed listings cap at 100 recently updated PRs, and diff
 categories inspect at most ten eligible selected merges. Inspected counts and
-capture dates remain visible. A partial read can miss a larger event.
+capture dates remain available through the row information control. A partial read can miss a larger event.
 
 Delete Club compares gross deletions on one inspected PR. Comment Magnet compares
 one PR's inline comment count. Merge Machine compares observed authored merge
@@ -69,3 +70,18 @@ GitHub API author IDs identify people and bots. Contributor photos use the API's
 validated `avatars.githubusercontent.com/u/` or bot-app `/in/` source. Repo-owner
 photos, stars, forks, and language come from the public metadata record. A photo
 failure does not change an award. GitHub's `Bot` type is not an AI-authorship claim.
+
+## Graphs and discovery
+
+Human/bot shares use the account types of observed merged-PR authors. Missing
+authors form a separate unknown group. Daily bars use actual merge timestamps
+in the captured listing, not a claim to all merges that day. Stars are metadata
+readings recorded on capture, with at most one point per UTC day for 90 days.
+
+Top stars discovers up to 100 public, non-fork, non-archived repos by star count
+each day. Trending selects up to 20 of those with positive net growth over up
+to seven days, requiring at least two daily readings. Award rows rank each
+cohort by its observed award value. The starting curated baseline is shown
+and labeled until discovery or growth history is available. No LLM judgment
+selects either group. Arbitrary lookups enter the comparison only for that
+result; they do not change the indexed cohort.

@@ -1,7 +1,10 @@
 import { parseRepository, replayReport, type Report } from "./core.js";
 import { avatarPath, repositoryFromPath, repositoryPath } from "./catalog.js";
-import { cardsMarkup, standingsMarkup, hook } from "./view.js";
+import { cardsMarkup, standingsMarkup, castFaces, hook } from "./view.js";
 import { icon, deckArtwork } from "./icons.js";
+import { chartsMarkup } from "./charts.js";
+import type { DailyPoint } from "./analytics.js";
+import type { LeaderboardRow } from "./catalog.js";
 import { resolveTheme, themePreference, type ThemePreference } from "./theme.js";
 
 function element<T extends HTMLElement>(id: string): T {
@@ -13,6 +16,7 @@ document.querySelectorAll<HTMLElement>("[data-icon]").forEach(node => node.repla
 const form = element<HTMLFormElement>("repo-form"), input = element<HTMLInputElement>("repo-input"), submit = element<HTMLButtonElement>("submit-button");
 const result = element("result"), loading = element("loading"), error = element("error");
 const cache = new Map<string, Report>();
+const presentationCache = new Map<string, { history: DailyPoint[]; comparison: LeaderboardRow[] }>();
 let generation = 0;
 const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
 let preference: ThemePreference = "system";
@@ -48,13 +52,16 @@ function celebrate(): void {
 function imageFallbacks(): void {
   document.querySelectorAll<HTMLImageElement>(".portrait img, #repo-avatar").forEach(image => image.addEventListener("error", () => { image.hidden = true; }));
 }
-function render(report: Report): void {
+function render(report: Report, presentation?: { history: DailyPoint[]; comparison: LeaderboardRow[] }): void {
   document.documentElement.classList.add("has-report");
   input.value = report.repository;
   element("result-title").textContent = report.repository;
   element("repo-description").textContent = report.description;
   element("repo-hook").textContent = hook(report);
-  element("summary").textContent = report.summary;
+  element("header-cast").innerHTML = castFaces(report);
+  element("insights").innerHTML = chartsMarkup(report, presentation?.history, presentation?.comparison);
+  submit.textContent = "Show repo";
+  element<HTMLDetailsElement>("repo-lookup").open = false;
   const owner = report.profile?.owner, avatar = element<HTMLImageElement>("repo-avatar");
   avatar.hidden = !owner;
   if (owner) { avatar.src = avatarPath(owner, 256); avatar.alt = `${report.repository.split("/")[0]} on GitHub`; }
@@ -91,18 +98,19 @@ async function load(raw: string, navigate = true): Promise<void> {
   let line = 0; element("loading-whimsy").textContent = loadingLines[0]; element("progress-text").textContent = "Meeting the cast and reading the plot…";
   const timer = window.setInterval(() => { if (run === generation) element("loading-whimsy").textContent = loadingLines[++line % loadingLines.length]; }, 2200);
   try {
+    let details: { history: DailyPoint[]; comparison: LeaderboardRow[] } | undefined;
     let expected = repository;
-    let report = cache.get(repository.toLowerCase());
+    let report = cache.get(repository.toLowerCase()); details = presentationCache.get(repository.toLowerCase());
     if (!report) {
       const response = await fetch(`/api/repos${repositoryPath(repository)}`, { signal: AbortSignal.timeout(30_000) });
       if (response.redirected) { expected = repositoryFromPath(new URL(response.url).pathname.slice(10)) ?? repository; }
-      const body = await response.json() as { error?: string };
+      const body = await response.json() as { error?: string; presentation?: { history: DailyPoint[]; comparison: LeaderboardRow[] } };
       if (!response.ok) throw new Error(body.error ?? "This round could not be loaded. Try again later.");
-      report = replayReport(body);
+      report = replayReport(body); details = body.presentation; if (details) presentationCache.set(report.repository.toLowerCase(), details);
     }
     if (run !== generation) return;
     if (report.repository.toLowerCase() !== expected.toLowerCase()) throw new Error("The result did not match this repository.");
-    cache.set(repository.toLowerCase(), report); render(report);
+    cache.set(repository.toLowerCase(), report); render(report, details);
     if (navigate) history.pushState(null, "", repositoryPath(report.repository));
     result.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block: "start" });
   } catch (cause) {
@@ -117,11 +125,21 @@ document.querySelectorAll<HTMLButtonElement>(".repo-chip").forEach(button => but
 window.addEventListener("popstate", () => {
   const repo = repositoryFromPath(location.pathname);
   if (repo) void load(repo, false);
-  else { ++generation; result.hidden = true; loading.hidden = true; document.documentElement.classList.remove("has-report"); }
+  else {
+    ++generation; result.hidden = true; loading.hidden = true; error.hidden = true;
+    document.documentElement.classList.remove("has-report"); element<HTMLDetailsElement>("repo-lookup").open = true;
+    document.title = "Repo Lore — your repo has lore";
+    element<HTMLLinkElement>("canonical").href = location.origin + "/";
+    element<HTMLMetaElement>("og-title").content = document.title;
+    element<HTMLMetaElement>("og-description").content = "The people, pull requests, and plot twists behind your favorite GitHub repo.";
+    element<HTMLMetaElement>("og-url").content = location.origin + "/";
+    element<HTMLMetaElement>("og-image").content = location.origin + "/_og/site.png";
+    element<HTMLMetaElement>("twitter-image").content = element<HTMLMetaElement>("og-image").content;
+  }
 });
 const bootstrap = document.getElementById("repo-data")?.textContent;
 if (bootstrap && bootstrap !== "null") {
-  try { const data = JSON.parse(bootstrap) as { error?: string }; if (typeof data.error === "string") { element("error-text").textContent = data.error; error.hidden = false; } else { const report = replayReport(data); cache.set(report.repository.toLowerCase(), report); render(report); } }
+  try { const data = JSON.parse(bootstrap) as { error?: string; presentation?: { history: DailyPoint[]; comparison: LeaderboardRow[] } }; if (typeof data.error === "string") { element("error-text").textContent = data.error; error.hidden = false; } else { const report = replayReport(data); if (data.presentation) presentationCache.set(report.repository.toLowerCase(), data.presentation); cache.set(report.repository.toLowerCase(), report); render(report, data.presentation); } }
   catch { element("error-text").textContent = "This snapshot could not be read. Enter the repo to try again."; error.hidden = false; }
 } else {
   const initial = repositoryFromPath(location.pathname) ?? new URL(location.href).searchParams.get("repo");
