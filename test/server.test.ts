@@ -39,10 +39,11 @@ test("legacy query URLs redirect to the clean path; unknown paths and methods st
 });
 test("server credentials remain on GitHub API requests and never reach the browser or cache", async () => {
   const { data, options } = setup((async (input, init) => {
-    const url = String(input); assert.ok(url.startsWith("https://api.github.com/repos/test/repo"));
+    const url = String(input); assert.ok(url.startsWith("https://api.github.com/repos/test/repo") || url === "https://api.github.com/graphql");
     assert.equal(new Headers(init?.headers).get("Authorization"), "Bearer test-secret");
     if (url.endsWith("/test/repo")) return new Response(JSON.stringify({ private: false, full_name: "test/repo", description: "", owner: { id: 42, login: "owner", type: "User" }, stargazers_count: 2, forks_count: 1, language: "TypeScript" }));
-    return new Response(JSON.stringify(url.endsWith("community/profile") ? { files: { contributing: null } } : []));
+    if (url === "https://api.github.com/graphql") return new Response(JSON.stringify({data:{repository:{isPrivate:false,nameWithOwner:"test/repo",merged:{nodes:[],pageInfo:{hasNextPage:false}},oldest:{nodes:[]}},discussed:{nodes:[]}}}));
+    return new Response(JSON.stringify([]));
   }) as typeof fetch);
   options.githubToken = "test-secret";
   const response = await createHandler(options)(new Request("https://repolore.fun/api/repos/test/repo"));

@@ -89,7 +89,7 @@ test("open age includes drafts and is distinct from review wait", () => {
 test("quiet repo gets empty awards; no fabricated winner", async () => {
   const result = await collect(routes([]));
   assert.equal(result.coverage.mergedObserved, 0); assert.ok(result.awards.every(a => a.status === "empty"));
-  assert.equal(result.awards.length, 7); assert.equal(result.coverage.periodComplete, true);
+  assert.equal(result.awards.length, 9); assert.equal(result.coverage.periodComplete, true);
 });
 test("private or unknown visibility stops before reading PRs", async () => {
   for (const privateValue of [true, undefined]) {

@@ -4,14 +4,21 @@ export type Pull = Evidence & {
   author: Author | null; createdAt: number; updatedAt: number;
   mergedAt: number | null; draft: boolean; association: string; headSha: string;
 };
-export type Detail = Pull & { additions: number; deletions: number; reviewComments: number };
+export type Detail = Pull & { additions: number; deletions: number; reviewComments: number | null; totalComments?: number };
 export type Award = {
   id: string; name: string; icon: string; status: "observed" | "empty" | "unknown";
   headline: string; value: string; description: string; scope: string; evidence: Evidence[];
 };
-export type RepositoryProfile = { owner: Author | null; stars: number | null; forks: number | null; language: string | null };
+export type RepositoryProfile = { owner: Author | null; stars: number | null; forks: number | null; language: string | null; ownerOrganization?: boolean; imageUrl?: string; artworkChecked?: boolean };
+export function repositoryImageUrl(value: unknown): string | undefined {
+  if(typeof value!=="string" || value.length>500) return undefined;
+  try { const url=new URL(value); if(url.protocol!=="https:" || url.username || url.password || url.port || url.search || url.hash) return undefined;
+    if(url.hostname==="repository-images.githubusercontent.com" && /^\/[a-f0-9-]+\/[a-f0-9-]+$/i.test(url.pathname)) return url.href;
+    if(url.hostname==="opengraph.githubassets.com" && /^\/[a-f0-9]{40,64}\/[a-z0-9_.-]+\/[a-z0-9_.-]+$/i.test(url.pathname)) return url.href;
+  }catch{} return undefined;
+}
 export type Report = {
-  version: 1; profile?: RepositoryProfile; repository: string; url: string; description: string; capturedAt: string;
+  version: 1 | 2; profile?: RepositoryProfile; repository: string; url: string; description: string; capturedAt: string;
   summary: string; awards: Award[]; notes: string[]; contributingUrl: string | null;
   coverage: { days: number; closedRead: number; mergedObserved: number; periodComplete: boolean;
     detailsRequested: number; detailsRead: number; openRead: number; requests: number };
@@ -94,7 +101,7 @@ function empty(id: string, name: string, icon: string, description: string, scop
   return { id, name, icon, status: unknown ? "unknown" : "empty", headline: unknown ? "Not enough evidence" : "No winner this round", value: "", description, scope, evidence: [] };
 }
 export function buildReport(input: {
-  repository: string; description: string; now: number; closed: Pull[]; open: Pull[];
+  repository: string; description: string; now: number; version?: 1 | 2; closed: Pull[]; open: Pull[];
   details: Detail[]; periodComplete: boolean; notes: string[]; contributingUrl: string | null;
   requests: number; openKnown: boolean; detailRequested: number; profile?: RepositoryProfile;
 }): Report {
@@ -127,10 +134,11 @@ export function buildReport(input: {
   if (deletion) awards.push({ id: "delete", name: "Delete Club", icon: "delete", status: "observed", headline: deletion.author ? `@${deletion.author.login}` : `PR #${deletion.number}`,
     value: `${deletion.deletions.toLocaleString("en-US")} lines deleted`, description: `A big day for the backspace key. PR #${deletion.number} deleted the most lines among inspected PRs. It also added ${deletion.additions.toLocaleString("en-US")} lines.`, scope: detailScope, evidence: [deletion] });
   else awards.push(empty("delete", "Delete Club", "delete", inspected.length ? "No deleted lines were recorded on the inspected PRs." : "No diff counts are available for the selected PRs.", detailScope, input.detailRequested > 0 && inspected.length === 0));
-  const magnet = [...inspected].filter(p => p.reviewComments > 0).sort((a, b) => b.reviewComments - a.reviewComments || a.number - b.number)[0];
+  const commentCount = (pr: Detail) => input.version === 2 ? pr.totalComments ?? 0 : pr.reviewComments ?? 0;
+  const magnet = [...inspected].filter(p => commentCount(p) > 0).sort((a, b) => commentCount(b) - commentCount(a) || a.number - b.number)[0];
   if (magnet) awards.push({ id: "comments", name: "Comment Magnet", icon: "comments", status: "observed", headline: `PR #${magnet.number}`,
-    value: `${magnet.reviewComments} review comments`, description: "This PR brought the conversation. The busiest inline review among inspected PRs. A comment count is not a roast or a defect count.", scope: detailScope, evidence: [magnet] });
-  else awards.push(empty("comments", "Comment Magnet", "comments", inspected.length ? "No inline review comments were recorded on the inspected PRs." : "No review-comment counts are available for the selected PRs.", detailScope, input.detailRequested > 0 && inspected.length === 0));
+    value: `${commentCount(magnet)} ${input.version === 2 ? "PR" : "review"} comment${commentCount(magnet) === 1 ? "" : "s"}`, description: "This PR brought the conversation. The busiest discussion among inspected PRs. A comment count is not a roast or a defect count.", scope: detailScope, evidence: [magnet] });
+  else awards.push(empty("comments", "Comment Magnet", "comments", inspected.length ? `No ${input.version === 2 ? "discussion" : "inline review"} comments were recorded on the inspected PRs.` : "No comment counts are available for the selected PRs.", detailScope, input.detailRequested > 0 && inspected.length === 0));
   awards.push({ id: "cast", name: "The Cast", icon: "cast", status: groups.size ? "observed" : "empty", headline: groups.size ? "Meet the cast" : "No identifiable author found",
     value: `${groups.size} contributor account${groups.size === 1 ? "" : "s"}`, description: "Roll credits. Distinct accounts that authored merged PRs in this snapshot. Includes bot accounts; this is not a count of new or external contributors.", scope: mergeScope, evidence: leaders.slice(0, 4).map(group => group.pulls[0]) });
   const oldest = [...open].filter(p => p.createdAt <= now).sort((a, b) => a.createdAt - b.createdAt || a.number - b.number)[0];
@@ -153,8 +161,12 @@ export function buildReport(input: {
     description: botPulls.length ? `The automation crew put in a shift. ${botPulls.length} of ${merged.length} observed merges came from GitHub bot accounts.` : unknownAuthors ? "Some author records are missing. No bot accounts appear in the readable ones." : "The bots sat this round out. No bot-authored merges in this snapshot.",
     scope: `${mergeScope} GitHub account types, not AI authorship.${unknownAuthors ? ` ${unknownAuthors} merge${unknownAuthors === 1 ? " has" : "s have"} no readable author.` : ""}`,
     evidence: botPulls.slice(0, 4) } : empty("bots", "Bot Party", "bots", "No recent merges to invite to the party.", mergeScope));
+  const addition=[...inspected].filter(pr=>pr.additions>0).sort((a,b)=>b.additions-a.additions||a.number-b.number)[0];
+  awards.push(addition ? {id:"additions",name:"Big Bang",icon:"additions",status:"observed",headline:addition.author ? "@"+addition.author.login : `PR #${addition.number}`,value:`${addition.additions.toLocaleString("en-US")} lines added`,description:`A big entrance. PR #${addition.number} added the most lines among inspected merges. It also deleted ${addition.deletions.toLocaleString("en-US")} lines.`,scope:detailScope,evidence:[addition]} : empty("additions","Big Bang","additions","No added lines were recorded on the inspected PRs.",detailScope));
+  const humanPulls=merged.filter(pr=>pr.author?.bot===false);
+  awards.push(merged.length ? {id:"humans",name:"Human Touch",icon:"humans",status:"observed",headline:humanPulls.length ? "People power" : "No user accounts found",value:`${humanPulls.length} human merge${humanPulls.length===1?"":"s"}`,description:"Merges from GitHub user accounts. Account type does not tell us who wrote the code.",scope:`${mergeScope} Counts GitHub User accounts; unidentified authors stay separate.`,evidence:humanPulls.slice(0,4)} : empty("humans","Human Touch","humans","No recent merges with readable user accounts.",mergeScope));
   const summary = `I found ${merged.length} PR${merged.length === 1 ? "" : "s"} merged in the past 90 days within ${closed.length} recently updated closed PRs. ${top ? `@${top.author.login} authored ${top.pulls.length} of those merges. ` : ""}I inspected ${inspected.length} selected PRs for diff and inline-review counts. These awards describe the observed snapshot, not developer skill or the project's contribution policy.`;
-  return { version: 1, ...(input.profile ? { profile: input.profile } : {}), repository, url: `https://github.com/${repository}`, description: input.description,
+  return { version: input.version ?? 1, ...(input.profile ? { profile: input.profile } : {}), repository, url: `https://github.com/${repository}`, description: input.description,
     capturedAt: new Date(now).toISOString(), summary, awards, notes: input.notes,
     contributingUrl: input.contributingUrl, coverage: { days: 90, closedRead: closed.length, mergedObserved: merged.length,
       periodComplete: input.periodComplete, detailsRequested: input.detailRequested, detailsRead: inspected.length,
@@ -269,7 +281,7 @@ export function plainReport(report: Report): string {
 }
 export function replayReport(value: unknown): Report {
   const saved = object(value);
-  if (saved.version !== 1) throw new ArcadeError("INPUT", "This is not a supported Repo Lore evidence file.");
+  if (saved.version !== 1 && saved.version !== 2) throw new ArcadeError("INPUT", "This is not a supported Repo Lore evidence file.");
   const repository = parseRepository(text(saved.repository, 150));
   const now = timestamp(saved.capturedAt); const facts = object(saved.facts); const coverage = object(saved.coverage);
   function pull(value: unknown): Pull {
@@ -282,16 +294,16 @@ export function replayReport(value: unknown): Report {
       created_at: date(row.createdAt), updated_at: date(row.updatedAt), merged_at: row.mergedAt === null ? null : date(row.mergedAt), draft: row.draft,
       author_association: row.association, head: { sha: row.headSha } }, repository);
   }
-  if (!Array.isArray(facts.closed) || facts.closed.length > 100 || !Array.isArray(facts.open) || facts.open.length > 30 ||
-    !Array.isArray(facts.details) || facts.details.length > DETAIL_LIMIT || typeof facts.openKnown !== "boolean" || typeof coverage.periodComplete !== "boolean") {
+  if (!Array.isArray(facts.closed) || facts.closed.length > (saved.version === 2 ? 120 : 100) || !Array.isArray(facts.open) || facts.open.length > 30 ||
+    !Array.isArray(facts.details) || facts.details.length > (saved.version === 2 ? 120 : DETAIL_LIMIT) || typeof facts.openKnown !== "boolean" || typeof coverage.periodComplete !== "boolean") {
     throw new ArcadeError("INPUT", "The saved evidence does not match the bounded Repo Lore format.");
   }
   const details: Detail[] = facts.details.map(value => {
     const row = object(value);
-    return { ...pull(row), additions: count(row.additions), deletions: count(row.deletions), reviewComments: count(row.reviewComments) };
+    return { ...pull(row), additions: count(row.additions), deletions: count(row.deletions), reviewComments: saved.version === 2 && row.reviewComments === null ? null : count(row.reviewComments), ...(saved.version === 2 ? { totalComments: count(row.totalComments) } : row.totalComments !== undefined ? { totalComments: count(row.totalComments) } : {}) };
   });
   const requested = count(coverage.detailsRequested);
-  if (requested > DETAIL_LIMIT) throw new ArcadeError("INPUT", "The saved evidence exceeds the PR inspection limit.");
+  if (requested > (saved.version === 2 ? 120 : DETAIL_LIMIT)) throw new ArcadeError("INPUT", "The saved evidence exceeds the PR inspection limit.");
   const notes = Array.isArray(saved.notes) ? saved.notes.slice(0, 30).map(note => text(note, 1000)) : [];
   let contributingUrl: string | null = null;
   if (typeof saved.contributingUrl === "string") {
@@ -303,9 +315,9 @@ export function replayReport(value: unknown): Report {
     const row = object(saved.profile); const owner = row.owner === null ? null : object(row.owner);
     const optionalCount = (value: unknown): number | null => value === null ? null : count(value);
     profile = { owner: owner ? author({ id: owner.id, login: owner.login, type: owner.bot === true ? "Bot" : "User", avatar_url: owner.avatarUrl }) : null,
-      stars: optionalCount(row.stars), forks: optionalCount(row.forks), language: row.language === null ? null : text(row.language, 80) };
+      ownerOrganization: row.ownerOrganization===true, artworkChecked: row.artworkChecked===true, ...(repositoryImageUrl(row.imageUrl) ? {imageUrl:repositoryImageUrl(row.imageUrl)} : {}), stars: optionalCount(row.stars), forks: optionalCount(row.forks), language: row.language === null ? null : text(row.language, 80) };
   }
-  return buildReport({ repository, profile, description: text(saved.description, 300), now,
+  return buildReport({ repository, profile, version: saved.version as 1 | 2, description: text(saved.description, 300), now,
     closed: facts.closed.map(pull), open: facts.open.map(pull), details, openKnown: facts.openKnown,
     detailRequested: requested, periodComplete: coverage.periodComplete, notes, contributingUrl, requests: count(coverage.requests) });
 }
