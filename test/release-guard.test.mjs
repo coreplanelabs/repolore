@@ -34,6 +34,10 @@ test("Access must cover the root and inspect overriding path applications", () =
   assert.throws(() => matchingApps([{ ...root, type: "saas" }]));
   assert.deepEqual(matchingApps([{ ...root, domain: undefined,
     destinations: [{ type: "public", uri: "repolore.fun" }] }]).length, 1);
+  const override = { ...api, domain: undefined,
+    destinations: [{ type: "public", uri: "https://repolore.fun/api/*" }] };
+  const wildcard = { ...api, domain: "repolore.*/api/*" };
+  assert.deepEqual(matchingApps([root, override, wildcard]), [root, override, wildcard]);
 });
 
 test("anonymous probes refuse public responses and unrelated redirects", async () => {

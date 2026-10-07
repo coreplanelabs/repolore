@@ -48,11 +48,13 @@ export function matchingApps(apps) {
   /** @param {AccessApp} app @returns {string[]} */
   const domains = (app) => [app.domain, ...(app.self_hosted_domains ?? []),
     ...(app.destinations ?? []).filter(d => d.type === "public").map(d => d.uri)]
-    .filter(domain => domain !== undefined);
+    .filter(domain => domain !== undefined)
+    .map(domain => domain.replace(/^https?:\/\//, "").replace(/\/$/, ""));
   /** @param {string} domain */
   const matches = (domain) => {
     const host = domain.split("/")[0];
-    return host === DOMAIN || host === "*" || host === "*.fun";
+    const pattern = host.split("*").map(part => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*");
+    return new RegExp(`^${pattern}$`, "i").test(DOMAIN);
   };
   const matching = apps.filter(app => domains(app).some(matches));
   assert.ok(matching.some(app => domains(app).includes(DOMAIN)),
