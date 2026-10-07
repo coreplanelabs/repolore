@@ -140,8 +140,8 @@ bun run wrangler deployments list --json
 
 Use the previous **known-good** version ID, not the newest uploaded version.
 The pre-CI recovery candidate recorded on October 6, 2026 is
-`3153ad68-8bb6-4953-87de-f7166f93e868`, source main
-`c624e8ff9c84cf52657b938e93bab7142cb4f433`; verify it is still available and
+`f292e0ed-e564-4838-a596-6f4494fc4db1`, source main
+`8ad1527f33afdc1b2be293dae01aec98be116d32`; verify it is still available and
 appropriate before rollback. Recovery changes Worker code/assets, not KV data
 or Access policy. Check signed-in pages, APIs, portraits, comparisons, and OG
 PNG after recovery. If a CLI command fails or times out, inspect the active
