@@ -1,16 +1,40 @@
 # Contributing
 
-Describe the problem or idea before a large change. Keep PRs focused and include
-screenshots for visual changes on desktop and mobile, in light and dark themes.
+Open a branch or fork and submit a pull request against `main`. Use Node 22+
+and Bun 1.4.2. Keep tests offline, copy plain, coverage explicit, and source
+links intact. Read [AGENTS.md](AGENTS.md) and [METHOD.md](METHOD.md).
 
-Install with bun install --frozen-lockfile, then run bun run typecheck,
-bun run test, and bun run build. Tests must be offline: inject network and time
-boundaries rather than accessing GitHub. Keep evidence bindings and missing-data
-states intact. Never turn absent records into zero counts or invented winners.
+Describe the idea before a large change. Keep missing-data states intact; never
+turn absent records into zero counts or invented winners. Avoid quality rankings,
+AI-authorship claims, or personal criticism based on comment counts.
 
-Use American English and short, human-readable copy. Fun descriptions must retain
-the actual meaning and coverage of the underlying counts. Avoid quality rankings,
-AI-authorship claims, or jokes that present comment counts as personal criticism.
+```sh
+bun install --frozen-lockfile
+bun run build
+bun run typecheck
+bun run test
+node --test test/release-guard.test.mjs
+node scripts/release-guard.mjs --local
+bun run wrangler versions upload --dry-run
+```
 
-Do not change hosting, Access policies, publication settings, or secrets as part
-of an ordinary contribution. The package is private on npm.
+Include what changed and validation results. For visual changes, include desktop
+and mobile screenshots in light and dark themes.
+Never commit credentials, captured private data, or generated output.
+Ordinary contributions do not change hosting, Access, publication, or secrets.
+The npm package stays private.
+
+`main` requires the current GitHub Actions `check`, an up-to-date branch, one
+independent approval after the latest push, and resolved conversations. New
+commits dismiss approvals. These rules apply to admins; force pushes and
+deletion are disabled. Maintainers squash merge. There are multiple writers;
+the PR author cannot self-approve. If only one writer remains, add a trusted
+reviewer rather than bypassing checks or pretending self-review is independent.
+
+Fork PRs run with read-only permissions and no production credentials. A
+maintainer must approve runs from external contributors after inspecting the
+diff, especially workflow changes. This approves running CI, not merging.
+Never execute fork code through `pull_request_target`.
+
+Successful checks on merged `main` trigger the production job. PRs never deploy.
+Release credentials and recovery steps are in [DEPLOYMENT.md](DEPLOYMENT.md).
