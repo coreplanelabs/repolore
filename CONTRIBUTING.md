@@ -24,8 +24,10 @@ Never commit credentials, captured private data, or generated output.
 Ordinary contributions do not change hosting, Access, publication, or secrets.
 The npm package stays private.
 
-`main` requires the current GitHub Actions `check`, an up-to-date branch, one
-independent approval after the latest push, and resolved conversations. New
+The intended release process requires the current GitHub Actions `check`, an
+up-to-date branch, one independent approval after the latest push, and resolved
+conversations. Justin temporarily deferred required reviews until CI/CD ships;
+[DEPLOYMENT.md](DEPLOYMENT.md) gives the activation order. Once enabled, new
 commits dismiss approvals. These rules apply to admins; force pushes and
 deletion are disabled. Maintainers squash merge. There are multiple writers;
 the PR author cannot self-approve. If only one writer remains, add a trusted
