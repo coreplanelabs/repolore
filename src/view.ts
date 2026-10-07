@@ -1,5 +1,5 @@
 import type { CardStandings, Neighbors } from "./neighbors.js";
-import type { Author, Report } from "./core.js";
+import type { Author, Award, Report } from "./core.js";
 import { avatarPath, awardPerson, CATEGORIES, contributors, hook, repositoryPath, type LeaderboardRow } from "./catalog.js";
 import { awardArtwork, ICONS } from "./icons.js";
 
@@ -12,29 +12,40 @@ export function castFaces(report: Report, botsOnly = false): string {
   const cast = contributors(report).filter(row => !botsOnly || row.author.bot), shown = cast.slice(0, 3), rest = cast.length - shown.length;
   return `<div class="avatar-stack">${shown.map(person => portrait(person.author)).join("")}${rest ? `<span class="portrait avatar-rest" title="${rest} other authors">+${rest}</span>` : ""}</div>`;
 }
+function cardDescription(report: Report, award: Award): string {
+  if (award.status !== "observed" || (award.id === "bots" && !award.evidence.length)) return award.description;
+  if (award.id === "delete") {
+    const detail = report.facts.details.find(pr => pr.number === award.evidence[0]?.number);
+    return `A big day for backspace.${detail ? ` Also added ${detail.additions.toLocaleString("en-US")} lines.` : ""}`;
+  }
+  return ({ merge: "Keeping the merge button warm.", comments: "This PR brought the conversation.", cast: "Roll credits. Meet the people behind the PRs.", oldest: "Still part of the plot.", fast: "Blink and it merged.", bots: "The automation crew put in a shift." } as Record<string, string>)[award.id] ?? award.description;
+}
+function cardFooter(report: Report, award: Award): string {
+  const coverage = ["delete", "comments"].includes(award.id) ? `${report.coverage.detailsRead} PRs inspected` : award.id === "oldest" ? `${report.coverage.openRead} open PRs read` : `90 days · ${report.coverage.mergedObserved} observed merges`;
+  const evidence = award.evidence.length ? `<details class="card-evidence"><summary>${glyph("github")}<span>View the PR${award.evidence.length > 1 ? "s" : ""}</span>${glyph("chevron")}</summary><ul>${award.evidence.map(pr => `<li><a href="${escapeHtml(pr.url)}" target="_blank" rel="noopener noreferrer">${glyph("github")} #${pr.number} ${escapeHtml(pr.title)}</a></li>`).join("")}</ul></details>` : "";
+  return `<footer class="award-footer"><div class="card-coverage"><span>${coverage}</span>${helpButton(award.scope + "\n" + award.description, "What this award counts", "About this award")}</div><div class="award-actions">${evidence}<a class="compare-link" href="/leaderboards/${award.id}">Leaderboard ${glyph("arrow")}</a></div></footer>`;
+}
 export function cardsMarkup(report: Report, standings?: CardStandings): string {
   return report.awards.map(award => {
     const person = awardPerson(report, award.id);
     const art = award.id === "cast" ? castFaces(report) : `<span class="award-art">${awardArtwork(award.id, "var(--card-accent)")}</span>`;
     return `<article class="award ${award.status}" data-award="${award.id}" id="award-${award.id}">
       <span class="award-watermark">${glyph(award.id)}</span><div class="award-header"><div class="award-label">${art}<span>${escapeHtml(award.name.toUpperCase())}</span>${award.id === "bots" ? `<div class="bot-crew">${castFaces(report, true)}</div>` : ""}</div>${person && !["cast", "bots"].includes(award.id) ? portrait(person, "portrait winner-portrait") : ""}</div>
-      <h3>${escapeHtml(award.headline)}</h3><p class="award-value">${escapeHtml(award.value)}</p><p class="award-description">${escapeHtml(award.description)}</p>
+      <h3>${escapeHtml(award.headline)}</h3><p class="award-value">${escapeHtml(award.value)}</p><p class="award-description">${escapeHtml(cardDescription(report, award))}</p>
       ${nearbyMarkup(award.id, standings?.[award.id])}
-      <p class="award-scope">${escapeHtml(award.scope)}</p>
-      ${award.evidence.length ? `<details><summary>View the PR${award.evidence.length > 1 ? "s" : ""}</summary><ul>${award.evidence.map(pr => `<li><a href="${escapeHtml(pr.url)}" target="_blank" rel="noopener noreferrer">${glyph("github")} #${pr.number} ${escapeHtml(pr.title)}</a></li>`).join("")}</ul></details>` : ""}
-      <a class="compare-link" href="/leaderboards/${award.id}">See the leaderboard ${glyph("arrow")}</a>
+      ${cardFooter(report, award)}
     </article>`;
   }).join("");
 }
 function nearbyMarkup(category: string, neighbors?: Neighbors | null): string {
   if (!neighbors) return "";
-  const peer = (row: LeaderboardRow | null, label: string) => {
-    if (!row) return `<div class="rival-row edge"><span>${label === "Just ahead" ? "Leading this group" : "End of this group"}</span></div>`;
-    const direction = row.score === neighbors.score ? "Level with" : label;
-    const person = row.person ?? row.repoOwner;
-    return `<a class="rival-row" href="${repositoryPath(row.repository)}#award-${category}" aria-label="${direction}: ${row.person ? "@" + escapeHtml(row.person.login) + " in " : ""}${escapeHtml(row.repository)}, ${escapeHtml(row.value)}"><span class="rival-direction">${direction}</span><span class="rival-identity">${person ? `<img src="${avatarPath(person, 64)}" width="20" height="20" alt="" loading="lazy">` : ""}<span>${escapeHtml(row.repository)}</span></span><span class="rival-value">${escapeHtml(row.value)}</span></a>`;
+  const peer = (row: LeaderboardRow | null, position: "above" | "below") => {
+    if (!row) return "";
+    const equal = row.score === neighbors.score, direction = equal ? "Level with" : position === "above" ? "Just ahead" : "Just behind", person = row.person ?? row.repoOwner;
+    return `<a class="rival-peek ${position}" href="${repositoryPath(row.repository)}#award-${category}" aria-label="${direction}: ${row.person ? "@" + escapeHtml(row.person.login) + " in " : ""}${escapeHtml(row.repository)}, ${escapeHtml(row.value)}"><span class="peer-direction" aria-hidden="true">${glyph(equal ? "rankEqual" : position === "above" ? "rankUp" : "rankDown")}</span>${person ? `<img src="${avatarPath(person, 64)}" width="20" height="20" alt="" loading="lazy">` : ""}<span class="peer-repo">${escapeHtml(row.repository)}</span><span class="peer-value">${escapeHtml(row.value)}</span></a>`;
   };
-  return `<aside class="card-rivals" aria-label="Nearby repos in ${escapeHtml(CATEGORIES[category].name)}"><div class="rivals-heading"><a href="/leaderboards/${category}">${neighbors.tied ? "Tied " : ""}#${neighbors.rank} of ${neighbors.total}</a>${helpButton("Ranks: Saved repo snapshots\nTies: Same score, same rank\nCoverage: Each repo's sample applies", "About this comparison", "Around your repo")}</div>${peer(neighbors.ahead, "Just ahead")}${peer(neighbors.behind, "Just behind")}</aside>`;
+  const name = `${neighbors.tied ? "Tied " : ""}#${neighbors.rank} of ${neighbors.total}`;
+  return `<aside class="card-rivals" aria-label="Nearby repos in ${escapeHtml(CATEGORIES[category].name)}">${peer(neighbors.ahead, "above")}<div class="rank-current"><a class="rank-focus" href="/leaderboards/${category}" aria-label="${name}"><span class="rank-label">REPO RANK</span><strong class="rank-number">#${neighbors.rank}</strong><span class="rank-context">of ${neighbors.total}${neighbors.tied ? '<span class="rank-tie">Tied</span>' : ""}</span></a>${helpButton("Ranks: Saved repo snapshots\nTies: Same score, same rank\nCoverage: Each repo's sample applies", "About this comparison", "Around your repo")}</div>${peer(neighbors.behind, "below")}</aside>`;
 }
 export function standingsMarkup(report: Report): string {
   const cast = contributors(report), bots = cast.filter(row => row.author.bot).reduce((sum, row) => sum + row.merges, 0);

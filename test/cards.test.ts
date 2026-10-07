@@ -46,3 +46,14 @@ test("celebration eligibility requires a top-ten observed result, not just any l
   assert.equal(topTenResult({ merge: { rank: 11, total: 100, score: 42, tied: false, ahead: null, behind: null } }), false);
   assert.equal(topTenResult({ merge: { rank: 10, total: 100, score: 42, tied: false, ahead: null, behind: null } }), true);
 });
+test("compact card footer preserves full scope, source links, and tie semantics", () => {
+  const mine = report("middle/repo", 2), equal = report("alpha/repo", 2);
+  const html = cardsMarkup(mine, cardStandings(mine, [equal]));
+  assert.match(html, /class="rank-number">#1</); assert.match(html, /class="rank-tie">Tied</);
+  assert.match(html, /aria-label="Level with:/); assert.match(html, /class="award-footer"/);
+  assert.match(html, /What this award counts/); assert.ok(html.includes(mine.awards[0].scope));
+  assert.match(html, /https:\/\/github.com\/middle\/repo\/pull\/1/);
+  const zero = report("humans/repo", 0, 2);
+  const bot = cardsMarkup(zero).split('id="award-bots"')[1];
+  assert.ok(!bot.includes("The automation crew put in a shift."));
+});
