@@ -7,12 +7,12 @@ existing account.
 
 ## GitHub delivery
 
-The release process requires one independent approval, resolved conversations,
-and the current GitHub Actions `check` on an up-to-date branch, including for
-admins. Required reviews are temporarily deferred at Justin's request until
-CI/CD ships. Required checks, conversation resolution, linear history, and
-admin enforcement remain active. Only squash merges are enabled.
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+As verified on October 7, 2026, main requires the current GitHub Actions
+`check`, resolved conversations, and an up-to-date branch. Admin enforcement
+and linear history remain enabled; maintainers squash merge. The configured
+required approval count is **zero**, under Justin's review waiver. CI is live.
+Do not describe an independent approval as an enforced gate or change the waiver
+without a separate user instruction. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 `Check` builds, typechecks, tests offline, validates the release guard, and
 bundles the Worker with pinned Wrangler 4.148.0. Node is pinned to 22.22.2 and
@@ -33,26 +33,13 @@ domain allow rules and deny rules; bypass, service auth, unresolved groups,
 missing policy reads, and wider audiences stop release. If the policy shape
 changes intentionally, review the guard rather than weakening Access.
 
-## One-time credential setup
+## Credential setup and rotation
 
-Merge the CI/CD PR first. Then re-enable independent review protection **before
-provisioning production secrets**; do not enable unattended releases during
-the temporary review waiver:
-
-```sh
-gh api --method PATCH repos/coreplanelabs/repolore/branches/main/protection/required_pull_request_reviews \
-  -F required_approving_review_count=1 -F dismiss_stale_reviews=true \
-  -F require_last_push_approval=true -F require_code_owner_reviews=false
-gh api repos/coreplanelabs/repolore/branches/main/protection
-```
-
-Verify those review fields, admin enforcement, strict GitHub Actions `check`,
-conversation resolution, and disabled force pushes/deletion in the response.
-The repo has six writers; one independent reviewer is available in principle,
-but cannot be the PR author. No author can self-approve.
-
-Deployment is **not operational until both production environment secrets are
-provisioned**. Create fresh Cloudflare account API tokens in the dashboard:
+Production environment secrets are configured, and main releases are operational.
+The following permissions are the release credential requirements, not a request
+to provision duplicates. Replace expiring tokens with fresh tokens of the same
+scope, store them in the production environment, and verify the release guard.
+Never print their values.
 
 | Environment secret | Permissions and scope |
 | --- | --- |
@@ -72,9 +59,9 @@ gh secret set CLOUDFLARE_ACCESS_READ_TOKEN --repo coreplanelabs/repolore --env p
 ```
 
 Never copy Wrangler OAuth or the developer's `gh` credentials into CI. The
-read-only ephemeral GitHub workflow token only checks current `main`; it is
-not the optional runtime GitHub public-read credential.
-Before enabling releases, verify the existing custom domain points to
+read-only ephemeral GitHub workflow token checks current `main` and supplies
+public GitHub reads to the daily index job. It is not a runtime credential.
+Before a release or credential rotation, verify the existing custom domain points to
 `repo-lore`, no Cloudflare Builds/deploy hook runs a competing release, and
 Access covers the bare `repolore.fun` host with the @coreplane.ai policy.
 With both fresh tokens explicitly provided in the local environment, run
@@ -219,3 +206,12 @@ its summary counts, the ten-result board, the dedicated top-100 route, and the
 last-refresh timestamp. Scheduled refreshes preserve the previous successful
 index if capture or publication fails. Check failures in GitHub Actions; a
 "Refreshed daily" label is cadence, while the timestamp shows actual freshness.
+
+## Separate AI-agent experiment
+
+Repo Lore keeps its nine awards and existing bot-account definition. The
+AI-focused experiment is separate; see [PROJECT_STATUS.md](PROJECT_STATUS.md).
+Do not point that project at this Worker, KV namespace, domain, CI environment,
+or credentials. Before any hosting change, verify the DNS-owning account and
+keep all services for that domain on the same account. Do not migrate to Polycorp
+on an assumed transfer-completion date.
