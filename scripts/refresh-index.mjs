@@ -7,7 +7,7 @@ import {
 	ARTWORK_QUERY,
 	collectRepositoryArtwork,
 } from "../.server-dist/server/github-index.js";
-import { parseRepository, replayReport } from "../.server-dist/src/core.js";
+import { replayReport } from "../.server-dist/src/core.js";
 import {
 	parseStarHistory,
 	starMetric,
@@ -15,6 +15,7 @@ import {
 import { appendPoint } from "../.server-dist/src/analytics.js";
 import { restorePublishedIndex } from "./index-restore.mjs";
 import { captureReason } from "./index-diagnostics.mjs";
+import { discoverRepositories } from "./index-discovery.mjs";
 import { publishIndex } from "./index-publication.mjs";
 import { CATEGORIES, leaderboard } from "../.server-dist/src/catalog.js";
 const args = process.argv.slice(2),
@@ -128,25 +129,9 @@ try {
 	discovered = null;
 }
 if (!discovered) {
-	const selected = [];
-	for (let page = 1; page <= Math.ceil(limit / 100); page++) {
-		const query = new URLSearchParams({
-			q: "is:public fork:false archived:false stars:>500",
-			sort: "stars",
-			order: "desc",
-			per_page: "100",
-			page: String(page),
-		});
-		const data = await api("/search/repositories?" + query);
-		if (data.incomplete_results || !Array.isArray(data.items))
-			throw new Error("Incomplete discovery.");
-		for (const row of data.items)
-			if (row.private === false && !row.fork && !row.archived)
-				selected.push(parseRepository(row.full_name));
-	}
 	discovered = {
 		capturedAt: stamp,
-		selected: [...new Set(selected)].slice(0, limit),
+		selected: await discoverRepositories({ limit, read: api, wait: pause }),
 	};
 	await writeFile(new URL("discovery.json", root), JSON.stringify(discovered));
 }
